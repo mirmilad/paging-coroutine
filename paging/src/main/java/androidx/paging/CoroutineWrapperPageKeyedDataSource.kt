@@ -17,10 +17,10 @@ package androidx.paging
 
 import androidx.arch.core.util.Function
 
-internal class WrapperPageKeyedDataSource<K, A, B>(
-    private val mSource: PageKeyedDataSource<K, A>,
+internal class CoroutineWrapperPageKeyedDataSource<K, A, B>(
+    private val mSource: CoroutinePageKeyedDataSource<K, A>,
     /* synthetic access */val mListFunction: Function<List<A>, List<B>>
-) : PageKeyedDataSource<K, B>() {
+) : CoroutinePageKeyedDataSource<K, B>() {
     override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
         mSource.addInvalidatedCallback(onInvalidatedCallback)
     }

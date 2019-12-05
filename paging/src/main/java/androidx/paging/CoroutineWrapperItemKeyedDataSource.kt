@@ -18,10 +18,10 @@ package androidx.paging
 import androidx.arch.core.util.Function
 import java.util.*
 
-internal class WrapperItemKeyedDataSource<K, A, B>(
-    private val mSource: ItemKeyedDataSource<K, A>,
+internal class CoroutineWrapperItemKeyedDataSource<K, A, B>(
+    private val mSource: CoroutineItemKeyedDataSource<K, A>,
     /* synthetic access */val mListFunction: Function<List<A>, List<B>>
-) : ItemKeyedDataSource<K, B>() {
+) : CoroutineItemKeyedDataSource<K, B>() {
     private val mKeyMap = IdentityHashMap<B, K>()
     override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
         mSource.addInvalidatedCallback(onInvalidatedCallback)

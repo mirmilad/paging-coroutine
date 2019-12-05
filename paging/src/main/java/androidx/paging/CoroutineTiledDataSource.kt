@@ -27,7 +27,7 @@ import androidx.annotation.WorkerThread
 </T> */
 @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
 @Deprecated("Use {@link PositionalDataSource}\n" + "  ")
-internal abstract class TiledDataSource<T> : PositionalDataSource<T>() {
+internal abstract class CoroutineTiledDataSource<T> : CoroutinePositionalDataSource<T>() {
     @WorkerThread
     abstract fun countItems(): Int
 

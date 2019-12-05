@@ -17,9 +17,8 @@ package androidx.paging
 
 import androidx.annotation.WorkerThread
 import androidx.arch.core.util.Function
-import androidx.paging.DataSource.LoadCallbackHelper
 import androidx.paging.PageResult.ResultType
-import androidx.paging.PositionalDataSource.LoadInitialCallback
+import androidx.paging.CoroutinePositionalDataSource.LoadInitialCallback
 import java.util.concurrent.Executor
 
 /**
@@ -30,7 +29,7 @@ import java.util.concurrent.Executor
  * Extend PositionalDataSource if you can load pages of a requested size at arbitrary
  * positions, and provide a fixed item count. If your data source can't support loading arbitrary
  * requested page sizes (e.g. when network page size constraints are only known at runtime), use
- * either [PageKeyedDataSource] or [ItemKeyedDataSource] instead.
+ * either [CoroutinePageKeyedDataSource] or [CoroutineItemKeyedDataSource] instead.
  *
  *
  * Note that unless [placeholders are disabled][PagedList.Config.enablePlaceholders]
@@ -50,7 +49,7 @@ import java.util.concurrent.Executor
  *
  * @param <T> Type of items being loaded by the PositionalDataSource.
 </T> */
-internal abstract class PositionalDataSource<T> : DataSource<Int?, T>() {
+internal abstract class CoroutinePositionalDataSource<T> : DataSource<Int?, T>() {
     /**
      * Holder object for inputs to [.loadInitial].
      */
@@ -192,7 +191,7 @@ internal abstract class PositionalDataSource<T> : DataSource<Int?, T>() {
     }
 
     internal class LoadInitialCallbackImpl<T>(
-        dataSource: PositionalDataSource<*>, countingEnabled: Boolean,
+        dataSource: CoroutinePositionalDataSource<*>, countingEnabled: Boolean,
         pageSize: Int, receiver: PageResult.Receiver<T>
     ) :
         LoadInitialCallback<T>() {
@@ -254,7 +253,7 @@ internal abstract class PositionalDataSource<T> : DataSource<Int?, T>() {
     }
 
     internal class LoadRangeCallbackImpl<T>(
-        dataSource: PositionalDataSource<*>,
+        dataSource: CoroutinePositionalDataSource<*>,
         @ResultType resultType: Int, positionOffset: Int,
         mainThreadExecutor: Executor?, receiver: PageResult.Receiver<T>?
     ) :
@@ -365,13 +364,13 @@ internal abstract class PositionalDataSource<T> : DataSource<Int?, T>() {
         return false
     }
 
-    fun wrapAsContiguousWithoutPlaceholders(): ContiguousDataSource<Int, T> {
+    fun wrapAsContiguousWithoutPlaceholders(): CoroutineContiguousDataSource<Int, T> {
         return ContiguousWithoutPlaceholdersWrapper(this)
     }
 
     internal class ContiguousWithoutPlaceholdersWrapper<Value>(
-        val mSource: PositionalDataSource<Value>
-    ) : ContiguousDataSource<Int, Value>() {
+        val mSource: CoroutinePositionalDataSource<Value>
+    ) : CoroutineContiguousDataSource<Int, Value>() {
         override fun addInvalidatedCallback(
             onInvalidatedCallback: InvalidatedCallback
         ) {
@@ -461,11 +460,11 @@ internal abstract class PositionalDataSource<T> : DataSource<Int?, T>() {
 
     override fun <V> mapByPage(
         function: Function<List<T>, List<V>>
-    ): PositionalDataSource<V> {
-        return WrapperPositionalDataSource(this, function)
+    ): CoroutinePositionalDataSource<V> {
+        return CoroutineWrapperPositionalDataSource(this, function)
     }
 
-    override fun <V> map(function: Function<T, V>): PositionalDataSource<V> {
+    override fun <V> map(function: Function<T, V>): CoroutinePositionalDataSource<V> {
         return mapByPage(createListFunction(function))
     }
 

@@ -23,8 +23,8 @@ import java.lang.annotation.Retention
 import java.lang.annotation.RetentionPolicy
 import java.util.concurrent.Executor
 
-internal class ContiguousPagedList<K, V>(
-    /* synthetic access */val mDataSource: ContiguousDataSource<K, V>,
+internal class CoroutineContiguousPagedList<K, V>(
+    /* synthetic access */val mDataSource: CoroutineContiguousDataSource<K, V>,
                           mainThreadExecutor: Executor,
                           backgroundThreadExecutor: Executor,
                           boundaryCallback: BoundaryCallback<V>?,
@@ -74,7 +74,7 @@ internal class ContiguousPagedList<K, V>(
                 if (resultType == PageResult.INIT) {
                     mStorage.init(
                         pageResult.leadingNulls, page, pageResult.trailingNulls,
-                        pageResult.positionOffset, this@ContiguousPagedList
+                        pageResult.positionOffset, this@CoroutineContiguousPagedList
                     )
                     if (mLastLoad == LAST_LOAD_UNSPECIFIED) { // Because the ContiguousPagedList wasn't initialized with a last load position,
 // initialize it to the middle of the initial load
@@ -94,14 +94,14 @@ internal class ContiguousPagedList<K, V>(
                             mAppendItemsRequested = 0
                             mAppendWorkerState = READY_TO_FETCH
                         } else {
-                            mStorage.appendPage(page, this@ContiguousPagedList)
+                            mStorage.appendPage(page, this@CoroutineContiguousPagedList)
                         }
                     } else if (resultType == PageResult.PREPEND) {
                         if (skipNewPage && trimFromFront) { // don't append this data, drop it
                             mPrependItemsRequested = 0
                             mPrependWorkerState = READY_TO_FETCH
                         } else {
-                            mStorage.prependPage(page, this@ContiguousPagedList)
+                            mStorage.prependPage(page, this@CoroutineContiguousPagedList)
                         }
                     } else {
                         throw IllegalArgumentException("unexpected resultType $resultType")
@@ -113,7 +113,7 @@ internal class ContiguousPagedList<K, V>(
                                         mReplacePagesWithNulls,
                                         mConfig.maxSize,
                                         mRequiredRemainder,
-                                        this@ContiguousPagedList
+                                        this@CoroutineContiguousPagedList
                                     )
                                 ) { // trimmed from front, ensure we can fetch in that dir
                                     mPrependWorkerState =
@@ -126,7 +126,7 @@ internal class ContiguousPagedList<K, V>(
                                         mReplacePagesWithNulls,
                                         mConfig.maxSize,
                                         mRequiredRemainder,
-                                        this@ContiguousPagedList
+                                        this@CoroutineContiguousPagedList
                                     )
                                 ) {
                                     mAppendWorkerState =

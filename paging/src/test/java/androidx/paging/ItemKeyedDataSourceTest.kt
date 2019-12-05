@@ -185,11 +185,11 @@ class ItemKeyedDataSourceTest {
     fun loadBefore() {
         val dataSource = ItemDataSource()
         @Suppress("UNCHECKED_CAST")
-        val callback = mock(ItemKeyedDataSource.LoadCallback::class.java)
-                as ItemKeyedDataSource.LoadCallback<Item>
+        val callback = mock(CoroutineItemKeyedDataSource.LoadCallback::class.java)
+                as CoroutineItemKeyedDataSource.LoadCallback<Item>
 
         dataSource.loadBefore(
-                ItemKeyedDataSource.LoadParams(dataSource.getKey(ITEMS_BY_NAME_ID[5]), 5), callback)
+                CoroutineItemKeyedDataSource.LoadParams(dataSource.getKey(ITEMS_BY_NAME_ID[5]), 5), callback)
 
         @Suppress("UNCHECKED_CAST")
         val argument = argumentCaptor<List<Item>>() //ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<Item>>
@@ -208,7 +208,7 @@ class ItemKeyedDataSourceTest {
 
     internal class ItemDataSource(private val counted: Boolean = true,
                                   private val items: List<Item> = ITEMS_BY_NAME_ID)
-            : ItemKeyedDataSource<Key, Item>() {
+            : CoroutineItemKeyedDataSource<Key, Item>() {
 
         override fun loadInitial(
                 params: LoadInitialParams<Key>,
@@ -258,8 +258,8 @@ class ItemKeyedDataSourceTest {
 
     private fun performLoadInitial(
             invalidateDataSource: Boolean = false,
-            callbackInvoker: (callback: ItemKeyedDataSource.LoadInitialCallback<String>) -> Unit) {
-        val dataSource = object : ItemKeyedDataSource<String, String>() {
+            callbackInvoker: (callback: CoroutineItemKeyedDataSource.LoadInitialCallback<String>) -> Unit) {
+        val dataSource = object : CoroutineItemKeyedDataSource<String, String>() {
             override fun getKey(item: String): String {
                 return ""
             }
@@ -283,13 +283,13 @@ class ItemKeyedDataSourceTest {
             }
         }
 
-        ContiguousPagedList<String, String>(
+        CoroutineContiguousPagedList<String, String>(
                 dataSource, FailExecutor(), FailExecutor(), null,
                 PagedList.Config.Builder()
                         .setPageSize(10)
                         .build(),
                 "",
-                ContiguousPagedList.LAST_LOAD_UNSPECIFIED)
+                CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
     }
 
     @Test
@@ -335,8 +335,8 @@ class ItemKeyedDataSourceTest {
         it.onResult(emptyList(), 0, 1)
     }
 
-    private abstract class WrapperDataSource<K, A, B>(private val source: ItemKeyedDataSource<K, A>)
-            : ItemKeyedDataSource<K, B>() {
+    private abstract class WrapperDataSource<K, A, B>(private val source: CoroutineItemKeyedDataSource<K, A>)
+            : CoroutineItemKeyedDataSource<K, B>() {
         override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
             source.addInvalidatedCallback(onInvalidatedCallback)
         }
@@ -386,7 +386,7 @@ class ItemKeyedDataSourceTest {
 
     private data class DecoratedItem(val item: Item)
 
-    private class DecoratedWrapperDataSource(private val source: ItemKeyedDataSource<Key, Item>)
+    private class DecoratedWrapperDataSource(private val source: CoroutineItemKeyedDataSource<Key, Item>)
             : WrapperDataSource<Key, Item, DecoratedItem>(source) {
         override fun convert(source: List<Item>): List<DecoratedItem> {
             return source.map { DecoratedItem(it) }
@@ -398,7 +398,7 @@ class ItemKeyedDataSourceTest {
     }
 
     private fun verifyWrappedDataSource(createWrapper:
-            (ItemKeyedDataSource<Key, Item>) -> ItemKeyedDataSource<Key, DecoratedItem>) {
+            (CoroutineItemKeyedDataSource<Key, Item>) -> CoroutineItemKeyedDataSource<Key, DecoratedItem>) {
         // verify that it's possible to wrap an ItemKeyedDataSource, and add info to its data
 
         val orig = ItemDataSource(items = ITEMS_BY_NAME_ID)
@@ -406,26 +406,26 @@ class ItemKeyedDataSourceTest {
 
         // load initial
         @Suppress("UNCHECKED_CAST")
-        val loadInitialCallback = mock(ItemKeyedDataSource.LoadInitialCallback::class.java)
-                as ItemKeyedDataSource.LoadInitialCallback<DecoratedItem>
+        val loadInitialCallback = mock(CoroutineItemKeyedDataSource.LoadInitialCallback::class.java)
+                as CoroutineItemKeyedDataSource.LoadInitialCallback<DecoratedItem>
         val initKey = orig.getKey(ITEMS_BY_NAME_ID.first())
-        wrapper.loadInitial(ItemKeyedDataSource.LoadInitialParams(initKey, 10, false),
+        wrapper.loadInitial(CoroutineItemKeyedDataSource.LoadInitialParams(initKey, 10, false),
                 loadInitialCallback)
         verify(loadInitialCallback).onResult(
                 ITEMS_BY_NAME_ID.subList(0, 10).map { DecoratedItem(it) })
         verifyNoMoreInteractions(loadInitialCallback)
 
         @Suppress("UNCHECKED_CAST")
-        val loadCallback = mock(ItemKeyedDataSource.LoadCallback::class.java)
-                as ItemKeyedDataSource.LoadCallback<DecoratedItem>
+        val loadCallback = mock(CoroutineItemKeyedDataSource.LoadCallback::class.java)
+                as CoroutineItemKeyedDataSource.LoadCallback<DecoratedItem>
         val key = orig.getKey(ITEMS_BY_NAME_ID[20])
         // load after
-        wrapper.loadAfter(ItemKeyedDataSource.LoadParams(key, 10), loadCallback)
+        wrapper.loadAfter(CoroutineItemKeyedDataSource.LoadParams(key, 10), loadCallback)
         verify(loadCallback).onResult(ITEMS_BY_NAME_ID.subList(21, 31).map { DecoratedItem(it) })
         verifyNoMoreInteractions(loadCallback)
 
         // load before
-        wrapper.loadBefore(ItemKeyedDataSource.LoadParams(key, 10), loadCallback)
+        wrapper.loadBefore(CoroutineItemKeyedDataSource.LoadParams(key, 10), loadCallback)
         verify(loadCallback).onResult(ITEMS_BY_NAME_ID.subList(10, 20).map { DecoratedItem(it) })
         verifyNoMoreInteractions(loadCallback)
 

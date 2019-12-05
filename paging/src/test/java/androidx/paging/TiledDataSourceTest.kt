@@ -30,7 +30,7 @@ import org.mockito.Mockito.verifyNoMoreInteractions
 @RunWith(JUnit4::class)
 internal class TiledDataSourceTest {
 
-    fun TiledDataSource<String>.loadInitial(
+    fun CoroutineTiledDataSource<String>.loadInitial(
             startPosition: Int, count: Int, pageSize: Int): List<String> {
         @Suppress("UNCHECKED_CAST")
         val receiver = mock(PageResult.Receiver::class.java) as PageResult.Receiver<String>
@@ -50,7 +50,7 @@ internal class TiledDataSourceTest {
 
     @Test
     fun loadInitialEmpty() {
-        class EmptyDataSource : TiledDataSource<String>() {
+        class EmptyDataSource : CoroutineTiledDataSource<String>() {
             override fun countItems(): Int {
                 return 0
             }
@@ -66,7 +66,7 @@ internal class TiledDataSourceTest {
     @Test
     fun loadInitialTooLong() {
         val list = List(26) { "" + 'a' + it }
-        class AlphabetDataSource : TiledDataSource<String>() {
+        class AlphabetDataSource : CoroutineTiledDataSource<String>() {
             override fun countItems(): Int {
                 return list.size
             }

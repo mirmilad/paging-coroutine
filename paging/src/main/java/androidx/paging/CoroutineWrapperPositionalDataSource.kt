@@ -17,10 +17,10 @@ package androidx.paging
 
 import androidx.arch.core.util.Function
 
-internal class WrapperPositionalDataSource<A, B>(
-    private val mSource: PositionalDataSource<A>,
+internal class CoroutineWrapperPositionalDataSource<A, B>(
+    private val mSource: CoroutinePositionalDataSource<A>,
     /* synthetic access */val mListFunction: Function<List<A>, List<B>>
-) : PositionalDataSource<B>() {
+) : CoroutinePositionalDataSource<B>() {
     override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
         mSource.addInvalidatedCallback(onInvalidatedCallback)
     }

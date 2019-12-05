@@ -33,9 +33,9 @@ class PositionalDataSourceTest {
             requestedLoadSize: Int,
             pageSize: Int,
             totalCount: Int): Int {
-        val params = PositionalDataSource.LoadInitialParams(
+        val params = CoroutinePositionalDataSource.LoadInitialParams(
                 requestedStartPosition, requestedLoadSize, pageSize, true)
-        return PositionalDataSource.computeInitialLoadPosition(params, totalCount)
+        return CoroutinePositionalDataSource.computeInitialLoadPosition(params, totalCount)
     }
 
     @Test
@@ -91,11 +91,11 @@ class PositionalDataSourceTest {
                 .setInitialLoadSizeHint(10)
                 .setEnablePlaceholders(true)
                 .build()
-        val dataSource: PositionalDataSource<Int> = ListDataSource((0..99).toList())
+        val dataSource: CoroutinePositionalDataSource<Int> = CoroutineListDataSource((0..99).toList())
         val testExecutor = TestExecutor()
-        val pagedList = ContiguousPagedList(dataSource.wrapAsContiguousWithoutPlaceholders(),
+        val pagedList = CoroutineContiguousPagedList(dataSource.wrapAsContiguousWithoutPlaceholders(),
                 testExecutor, testExecutor, null, config, 15,
-                ContiguousPagedList.LAST_LOAD_UNSPECIFIED)
+                CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
 
         assertEquals((10..19).toList(), pagedList)
 
@@ -115,8 +115,8 @@ class PositionalDataSourceTest {
     private fun performLoadInitial(
             enablePlaceholders: Boolean = true,
             invalidateDataSource: Boolean = false,
-            callbackInvoker: (callback: PositionalDataSource.LoadInitialCallback<String>) -> Unit) {
-        val dataSource = object : PositionalDataSource<String>() {
+            callbackInvoker: (callback: CoroutinePositionalDataSource.LoadInitialCallback<String>) -> Unit) {
+        val dataSource = object : CoroutinePositionalDataSource<String>() {
             override fun loadInitial(
                     params: LoadInitialParams,
                     callback: LoadInitialCallback<String>) {
@@ -139,9 +139,9 @@ class PositionalDataSourceTest {
         if (enablePlaceholders) {
             TiledPagedList(dataSource, FailExecutor(), FailExecutor(), null, config, 0)
         } else {
-            ContiguousPagedList(dataSource.wrapAsContiguousWithoutPlaceholders(),
+            CoroutineContiguousPagedList(dataSource.wrapAsContiguousWithoutPlaceholders(),
                     FailExecutor(), FailExecutor(), null, config, null,
-                    ContiguousPagedList.LAST_LOAD_UNSPECIFIED)
+                    CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
         }
     }
 
@@ -218,8 +218,8 @@ class PositionalDataSourceTest {
         it.onResult(emptyList(), 0, 1)
     }
 
-    private abstract class WrapperDataSource<in A, B>(private val source: PositionalDataSource<A>)
-            : PositionalDataSource<B>() {
+    private abstract class WrapperDataSource<in A, B>(private val source: CoroutinePositionalDataSource<A>)
+            : CoroutinePositionalDataSource<B>() {
         override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
             source.addInvalidatedCallback(onInvalidatedCallback)
         }
@@ -259,7 +259,7 @@ class PositionalDataSourceTest {
         protected abstract fun convert(source: List<A>): List<B>
     }
 
-    private class StringWrapperDataSource<in A>(source: PositionalDataSource<A>)
+    private class StringWrapperDataSource<in A>(source: CoroutinePositionalDataSource<A>)
             : WrapperDataSource<A, String>(source) {
         override fun convert(source: List<A>): List<String> {
             return source.map { it.toString() }
@@ -267,26 +267,26 @@ class PositionalDataSourceTest {
     }
 
     private fun verifyWrappedDataSource(
-            createWrapper: (PositionalDataSource<Int>) -> PositionalDataSource<String>) {
-        val orig = ListDataSource(listOf(0, 5, 4, 8, 12))
+            createWrapper: (CoroutinePositionalDataSource<Int>) -> CoroutinePositionalDataSource<String>) {
+        val orig = CoroutineListDataSource(listOf(0, 5, 4, 8, 12))
         val wrapper = createWrapper(orig)
 
         // load initial
         @Suppress("UNCHECKED_CAST")
-        val loadInitialCallback = mock(PositionalDataSource.LoadInitialCallback::class.java)
-                as PositionalDataSource.LoadInitialCallback<String>
+        val loadInitialCallback = mock(CoroutinePositionalDataSource.LoadInitialCallback::class.java)
+                as CoroutinePositionalDataSource.LoadInitialCallback<String>
 
-        wrapper.loadInitial(PositionalDataSource.LoadInitialParams(0, 2, 1, true),
+        wrapper.loadInitial(CoroutinePositionalDataSource.LoadInitialParams(0, 2, 1, true),
                 loadInitialCallback)
         verify(loadInitialCallback).onResult(listOf("0", "5"), 0, 5)
         verifyNoMoreInteractions(loadInitialCallback)
 
         // load range
         @Suppress("UNCHECKED_CAST")
-        val loadRangeCallback = mock(PositionalDataSource.LoadRangeCallback::class.java)
-                as PositionalDataSource.LoadRangeCallback<String>
+        val loadRangeCallback = mock(CoroutinePositionalDataSource.LoadRangeCallback::class.java)
+                as CoroutinePositionalDataSource.LoadRangeCallback<String>
 
-        wrapper.loadRange(PositionalDataSource.LoadRangeParams(2, 3), loadRangeCallback)
+        wrapper.loadRange(CoroutinePositionalDataSource.LoadRangeParams(2, 3), loadRangeCallback)
         verify(loadRangeCallback).onResult(listOf("4", "8", "12"))
         verifyNoMoreInteractions(loadRangeCallback)
 
@@ -319,7 +319,7 @@ class PositionalDataSourceTest {
 
     @Test
     fun testInvalidateToWrapper() {
-        val orig = ListDataSource(listOf(0, 1, 2))
+        val orig = CoroutineListDataSource(listOf(0, 1, 2))
         val wrapper = orig.map { it.toString() }
 
         orig.invalidate()
@@ -328,7 +328,7 @@ class PositionalDataSourceTest {
 
     @Test
     fun testInvalidateFromWrapper() {
-        val orig = ListDataSource(listOf(0, 1, 2))
+        val orig = CoroutineListDataSource(listOf(0, 1, 2))
         val wrapper = orig.map { it.toString() }
 
         wrapper.invalidate()
@@ -337,7 +337,7 @@ class PositionalDataSourceTest {
 
     @Test
     fun testInvalidateToWrapper_contiguous() {
-        val orig = ListDataSource(listOf(0, 1, 2))
+        val orig = CoroutineListDataSource(listOf(0, 1, 2))
         val wrapper = orig.wrapAsContiguousWithoutPlaceholders()
 
         orig.invalidate()
@@ -346,7 +346,7 @@ class PositionalDataSourceTest {
 
     @Test
     fun testInvalidateFromWrapper_contiguous() {
-        val orig = ListDataSource(listOf(0, 1, 2))
+        val orig = CoroutineListDataSource(listOf(0, 1, 2))
         val wrapper = orig.wrapAsContiguousWithoutPlaceholders()
 
         wrapper.invalidate()

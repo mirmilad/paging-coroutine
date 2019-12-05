@@ -19,8 +19,7 @@ package androidx.paging;
 import java.util.concurrent.Executor
 
 
-internal abstract class ContiguousDataSource<Key, Value> : DataSource<Key, Value>() {
-
+internal abstract class CoroutineContiguousDataSource<Key, Value> : DataSource<Key, Value>() {
 
     override fun isContiguous(): Boolean {
         return true;

@@ -203,17 +203,17 @@ public abstract class PagedList<T> extends AbstractList<T> {
             @NonNull Config config,
             @Nullable K key) {
         if (dataSource.isContiguous() || !config.enablePlaceholders) {
-            int lastLoad = ContiguousPagedList.LAST_LOAD_UNSPECIFIED;
+            int lastLoad = CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED;
             if (!dataSource.isContiguous()) {
                 //noinspection unchecked
-                dataSource = (DataSource<K, T>) ((PositionalDataSource<T>) dataSource)
+                dataSource = (DataSource<K, T>) ((CoroutinePositionalDataSource<T>) dataSource)
                         .wrapAsContiguousWithoutPlaceholders();
                 if (key != null) {
                     lastLoad = (Integer) key;
                 }
             }
-            ContiguousDataSource<K, T> contigDataSource = (ContiguousDataSource<K, T>) dataSource;
-            return new ContiguousPagedList<>(contigDataSource,
+            CoroutineContiguousDataSource<K, T> contigDataSource = (CoroutineContiguousDataSource<K, T>) dataSource;
+            return new CoroutineContiguousPagedList<>(contigDataSource,
                     notifyExecutor,
                     fetchExecutor,
                     boundaryCallback,
@@ -221,7 +221,7 @@ public abstract class PagedList<T> extends AbstractList<T> {
                     key,
                     lastLoad);
         } else {
-            return new TiledPagedList<>((PositionalDataSource<T>) dataSource,
+            return new TiledPagedList<>((CoroutinePositionalDataSource<T>) dataSource,
                     notifyExecutor,
                     fetchExecutor,
                     boundaryCallback,
@@ -670,10 +670,10 @@ public abstract class PagedList<T> extends AbstractList<T> {
     /**
      * Position offset of the data in the list.
      * <p>
-     * If data is supplied by a {@link PositionalDataSource}, the item returned from
+     * If data is supplied by a {@link CoroutinePositionalDataSource}, the item returned from
      * <code>get(i)</code> has a position of <code>i + getPositionOffset()</code>.
      * <p>
-     * If the DataSource is a {@link ItemKeyedDataSource} or {@link PageKeyedDataSource}, it
+     * If the DataSource is a {@link CoroutineItemKeyedDataSource} or {@link CoroutinePageKeyedDataSource}, it
      * doesn't use positions, returns 0.
      */
     public int getPositionOffset() {
@@ -874,7 +874,7 @@ public abstract class PagedList<T> extends AbstractList<T> {
          * Defines the maximum number of items that may be loaded into this pagedList before pages
          * should be dropped.
          * <p>
-         * {@link PageKeyedDataSource} does not currently support dropping pages - when
+         * {@link CoroutinePageKeyedDataSource} does not currently support dropping pages - when
          * loading from a {@code PageKeyedDataSource}, this value is ignored.
          *
          * @see #MAX_SIZE_UNBOUNDED
@@ -998,7 +998,7 @@ public abstract class PagedList<T> extends AbstractList<T> {
              * This value is typically larger than page size, so on first load data there's a large
              * enough range of content loaded to cover small scrolls.
              * <p>
-             * When using a {@link PositionalDataSource}, the initial load size will be coerced to
+             * When using a {@link CoroutinePositionalDataSource}, the initial load size will be coerced to
              * an integer multiple of pageSize, to enable efficient tiling.
              * <p>
              * If not set, defaults to three times page size.
@@ -1036,7 +1036,7 @@ public abstract class PagedList<T> extends AbstractList<T> {
              *     {@code pageSize + (2 * prefetchDistance)}) of the most recent load.
              * </ul>
              * <p>
-             * {@link PageKeyedDataSource} does not currently support dropping pages - when
+             * {@link CoroutinePageKeyedDataSource} does not currently support dropping pages - when
              * loading from a {@code PageKeyedDataSource}, this value is ignored.
              * <p>
              * If not set, defaults to {@code MAX_SIZE_UNBOUNDED}, which disables page dropping.

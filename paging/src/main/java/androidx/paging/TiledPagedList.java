@@ -27,7 +27,7 @@ import java.util.concurrent.Executor;
 class TiledPagedList<T> extends PagedList<T>
         implements PagedStorage.Callback {
     @SuppressWarnings("WeakerAccess") /* synthetic access */
-    final PositionalDataSource<T> mDataSource;
+    final CoroutinePositionalDataSource<T> mDataSource;
 
     @SuppressWarnings("WeakerAccess") /* synthetic access */
             PageResult.Receiver<T> mReceiver = new PageResult.Receiver<T>() {
@@ -82,7 +82,7 @@ class TiledPagedList<T> extends PagedList<T>
     };
 
     @WorkerThread
-    TiledPagedList(@NonNull PositionalDataSource<T> dataSource,
+    TiledPagedList(@NonNull CoroutinePositionalDataSource<T> dataSource,
                    @NonNull Executor mainThreadExecutor,
                    @NonNull Executor backgroundThreadExecutor,
                    @Nullable BoundaryCallback<T> boundaryCallback,

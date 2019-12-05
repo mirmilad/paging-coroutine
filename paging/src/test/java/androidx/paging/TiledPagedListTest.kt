@@ -70,7 +70,7 @@ class TiledPagedListTest {
         maxSize: Int = PagedList.Config.MAX_SIZE_UNBOUNDED
     ): TiledPagedList<Item> {
         return TiledPagedList(
-                ListDataSource(listData), mMainThread, mBackgroundThread, boundaryCallback,
+                CoroutineListDataSource(listData), mMainThread, mBackgroundThread, boundaryCallback,
                 PagedList.Config.Builder()
                         .setPageSize(pageSize)
                         .setInitialLoadSizeHint(pageSize * initPageCount)
@@ -83,7 +83,7 @@ class TiledPagedListTest {
     @Test
     fun getDataSource() {
         val pagedList = createTiledPagedList(loadPosition = 0, initPageCount = 1)
-        assertTrue(pagedList.dataSource is ListDataSource<Item>)
+        assertTrue(pagedList.dataSource is CoroutineListDataSource<Item>)
 
         // snapshot keeps same DataSource
         assertSame(pagedList.dataSource,
@@ -457,7 +457,7 @@ class TiledPagedListTest {
                 .setInitialLoadSizeHint(PAGE_SIZE)
                 .setEnablePlaceholders(false)
                 .build()
-        val pagedList = PagedList.Builder<Int, Item>(ListDataSource(ITEMS), config)
+        val pagedList = PagedList.Builder<Int, Item>(CoroutineListDataSource(ITEMS), config)
                 .setNotifyExecutor(mMainThread)
                 .setFetchExecutor(mBackgroundThread)
                 .setInitialKey(20)
@@ -466,7 +466,7 @@ class TiledPagedListTest {
         assertTrue(pagedList.isContiguous)
 
         @Suppress("UNCHECKED_CAST")
-        val contiguousPagedList = pagedList as ContiguousPagedList<Int, Item>
+        val contiguousPagedList = pagedList as CoroutineContiguousPagedList<Int, Item>
         assertEquals(0, contiguousPagedList.mStorage.leadingNullCount)
         assertEquals(PAGE_SIZE, contiguousPagedList.mStorage.storageCount)
         assertEquals(0, contiguousPagedList.mStorage.trailingNullCount)

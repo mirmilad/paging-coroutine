@@ -17,9 +17,9 @@
 package androidx.paging
 
 internal class AsyncListDataSource<T>(list: List<T>)
-    : PositionalDataSource<T>() {
+    : CoroutinePositionalDataSource<T>() {
     private val workItems: MutableList<() -> Unit> = ArrayList()
-    private val listDataSource = ListDataSource(list)
+    private val listDataSource = CoroutineListDataSource(list)
 
     override fun loadInitial(params: LoadInitialParams, callback: LoadInitialCallback<T>) {
         workItems.add {

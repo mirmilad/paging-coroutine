@@ -17,8 +17,8 @@ package androidx.paging
 
 import java.util.*
 
-internal class ListDataSource<T>(list: List<T>?) :
-    PositionalDataSource<T>() {
+internal class CoroutineListDataSource<T>(list: List<T>?) :
+    CoroutinePositionalDataSource<T>() {
     private val mList: List<T>
     override fun loadInitial(
         params: LoadInitialParams,

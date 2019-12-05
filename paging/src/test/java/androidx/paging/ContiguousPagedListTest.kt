@@ -46,7 +46,7 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
     }
 
     private inner class TestSource(val listData: List<Item> = ITEMS)
-            : ContiguousDataSource<Int, Item>() {
+            : CoroutineContiguousDataSource<Int, Item>() {
         override fun dispatchLoadInitial(
             key: Int?,
             initialLoadSize: Int,
@@ -156,10 +156,10 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
         prefetchDistance: Int = 20,
         listData: List<Item> = ITEMS,
         boundaryCallback: PagedList.BoundaryCallback<Item>? = null,
-        lastLoad: Int = ContiguousPagedList.LAST_LOAD_UNSPECIFIED,
+        lastLoad: Int = CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED,
         maxSize: Int = PagedList.Config.MAX_SIZE_UNBOUNDED
-    ): ContiguousPagedList<Int, Item> {
-        return ContiguousPagedList(
+    ): CoroutineContiguousPagedList<Int, Item> {
+        return CoroutineContiguousPagedList(
                 TestSource(listData), mMainThread, mBackgroundThread, boundaryCallback,
                 PagedList.Config.Builder()
                         .setPageSize(pageSize)
@@ -288,18 +288,18 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
 
     @Test
     fun prefetchRequestedPrepend() {
-        assertEquals(10, ContiguousPagedList.getPrependItemsRequested(10, 0, 0))
-        assertEquals(15, ContiguousPagedList.getPrependItemsRequested(10, 0, 5))
-        assertEquals(0, ContiguousPagedList.getPrependItemsRequested(1, 41, 40))
-        assertEquals(1, ContiguousPagedList.getPrependItemsRequested(1, 40, 40))
+        assertEquals(10, CoroutineContiguousPagedList.getPrependItemsRequested(10, 0, 0))
+        assertEquals(15, CoroutineContiguousPagedList.getPrependItemsRequested(10, 0, 5))
+        assertEquals(0, CoroutineContiguousPagedList.getPrependItemsRequested(1, 41, 40))
+        assertEquals(1, CoroutineContiguousPagedList.getPrependItemsRequested(1, 40, 40))
     }
 
     @Test
     fun prefetchRequestedAppend() {
-        assertEquals(10, ContiguousPagedList.getAppendItemsRequested(10, 9, 10))
-        assertEquals(15, ContiguousPagedList.getAppendItemsRequested(10, 9, 5))
-        assertEquals(0, ContiguousPagedList.getAppendItemsRequested(1, 8, 10))
-        assertEquals(1, ContiguousPagedList.getAppendItemsRequested(1, 9, 10))
+        assertEquals(10, CoroutineContiguousPagedList.getAppendItemsRequested(10, 9, 10))
+        assertEquals(15, CoroutineContiguousPagedList.getAppendItemsRequested(10, 9, 5))
+        assertEquals(0, CoroutineContiguousPagedList.getAppendItemsRequested(1, 8, 10))
+        assertEquals(1, CoroutineContiguousPagedList.getAppendItemsRequested(1, 9, 10))
     }
 
     @Test
@@ -585,7 +585,7 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
         val pagedList = createCountedPagedList(
                 initialPosition = 0,
                 initLoadSize = 20,
-                lastLoad = ContiguousPagedList.LAST_LOAD_UNSPECIFIED)
+                lastLoad = CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
         // last load is middle of initial load
         assertEquals(10, pagedList.mLastLoad)
         verifyRange(0, 20, pagedList)
@@ -596,10 +596,10 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
         // Note: ignores Parameterized param
         val asyncDataSource = AsyncListDataSource(ITEMS)
         val dataSource = asyncDataSource.wrapAsContiguousWithoutPlaceholders()
-        val pagedList = ContiguousPagedList(
+        val pagedList = CoroutineContiguousPagedList(
                 dataSource, mMainThread, mBackgroundThread, null,
                 PagedList.Config.Builder().setPageSize(10).build(), null,
-                ContiguousPagedList.LAST_LOAD_UNSPECIFIED)
+                CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
         val callback = mock(PagedList.Callback::class.java)
         pagedList.addWeakCallback(null, callback)
 
@@ -625,10 +625,10 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
         // Note: ignores Parameterized param
         val asyncDataSource = AsyncListDataSource(ITEMS)
         val dataSource = asyncDataSource.wrapAsContiguousWithoutPlaceholders()
-        val pagedList = ContiguousPagedList(
+        val pagedList = CoroutineContiguousPagedList(
                 dataSource, mMainThread, mBackgroundThread, null,
                 PagedList.Config.Builder().setPageSize(10).build(), null,
-                ContiguousPagedList.LAST_LOAD_UNSPECIFIED)
+                CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
         val callback = mock(PagedList.Callback::class.java)
 
         // capture empty snapshot

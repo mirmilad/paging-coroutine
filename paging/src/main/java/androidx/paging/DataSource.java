@@ -67,18 +67,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * copy changes, invalidate the previous DataSource, and a new one wrapping the new state of the
  * snapshot can be created.
  * <h4>Implementing a DataSource</h4>
- * To implement, extend one of the subclasses: {@link PageKeyedDataSource},
- * {@link ItemKeyedDataSource}, or {@link PositionalDataSource}.
+ * To implement, extend one of the subclasses: {@link CoroutinePageKeyedDataSource},
+ * {@link CoroutineItemKeyedDataSource}, or {@link CoroutinePositionalDataSource}.
  * <p>
- * Use {@link PageKeyedDataSource} if pages you load embed keys for loading adjacent pages. For
+ * Use {@link CoroutinePageKeyedDataSource} if pages you load embed keys for loading adjacent pages. For
  * example a network response that returns some items, and a next/previous page links.
  * <p>
- * Use {@link ItemKeyedDataSource} if you need to use data from item {@code N-1} to load item
+ * Use {@link CoroutineItemKeyedDataSource} if you need to use data from item {@code N-1} to load item
  * {@code N}. For example, if requesting the backend for the next comments in the list
  * requires the ID or timestamp of the most recent loaded comment, or if querying the next users
  * from a name-sorted database query requires the name and unique ID of the previous.
  * <p>
- * Use {@link PositionalDataSource} if you can load pages of a requested size at arbitrary
+ * Use {@link CoroutinePositionalDataSource} if you can load pages of a requested size at arbitrary
  * positions, and provide a fixed item count. PositionalDataSource supports querying pages at
  * arbitrary positions, so can provide data to PagedLists in arbitrary order. Note that
  * PositionalDataSource is required to respect page size for efficient tiling. If you want to
