@@ -30,13 +30,13 @@ class TiledPagedList<T> extends PagedList<T>
     final PositionalDataSource<T> mDataSource;
 
     @SuppressWarnings("WeakerAccess") /* synthetic access */
-    PageResult.Receiver<T> mReceiver = new PageResult.Receiver<T>() {
+            PageResult.Receiver<T> mReceiver = new PageResult.Receiver<T>() {
         // Creation thread for initial synchronous load, otherwise main thread
         // Safe to access main thread only state - no other thread has reference during construction
         @AnyThread
         @Override
         public void onPageResult(@PageResult.ResultType int type,
-                @NonNull PageResult<T> pageResult) {
+                                 @NonNull PageResult<T> pageResult) {
             if (pageResult.isInvalid()) {
                 detach();
                 return;
@@ -74,8 +74,8 @@ class TiledPagedList<T> extends PagedList<T>
                 int size = size();
                 boolean deferEnd = !deferEmpty
                         && ((type == PageResult.INIT && pageResult.trailingNulls == 0)
-                                || (type == PageResult.TILE
-                                        && (pageResult.positionOffset + mConfig.pageSize >= size)));
+                        || (type == PageResult.TILE
+                        && (pageResult.positionOffset + mConfig.pageSize >= size)));
                 deferBoundaryCallbacks(deferEmpty, deferBegin, deferEnd);
             }
         }
@@ -83,11 +83,11 @@ class TiledPagedList<T> extends PagedList<T>
 
     @WorkerThread
     TiledPagedList(@NonNull PositionalDataSource<T> dataSource,
-            @NonNull Executor mainThreadExecutor,
-            @NonNull Executor backgroundThreadExecutor,
-            @Nullable BoundaryCallback<T> boundaryCallback,
-            @NonNull Config config,
-            int position) {
+                   @NonNull Executor mainThreadExecutor,
+                   @NonNull Executor backgroundThreadExecutor,
+                   @Nullable BoundaryCallback<T> boundaryCallback,
+                   @NonNull Config config,
+                   int position) {
         super(new PagedStorage<T>(), mainThreadExecutor, backgroundThreadExecutor,
                 boundaryCallback, config);
         mDataSource = dataSource;
@@ -128,7 +128,7 @@ class TiledPagedList<T> extends PagedList<T>
 
     @Override
     protected void dispatchUpdatesSinceSnapshot(@NonNull PagedList<T> pagedListSnapshot,
-            @NonNull Callback callback) {
+                                                @NonNull Callback callback) {
         //noinspection UnnecessaryLocalVariable
         final PagedStorage<T> snapshot = pagedListSnapshot.mStorage;
 

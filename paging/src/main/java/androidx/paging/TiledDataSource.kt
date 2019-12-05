@@ -13,74 +13,62 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.paging
 
-package androidx.paging;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.annotation.RestrictTo;
-import androidx.annotation.WorkerThread;
-
-import java.util.Collections;
-import java.util.List;
+import androidx.annotation.RestrictTo
+import androidx.annotation.WorkerThread
 
 // NOTE: Room 1.0 depends on this class, so it should not be removed until
 // we can require a version of Room that uses PositionalDataSource directly
 /**
  * @param <T> Type loaded by the TiledDataSource.
  *
- * @deprecated Use {@link PositionalDataSource}
  * @hide
- */
-@SuppressWarnings("DeprecatedIsStillUsed")
-@Deprecated
+</T> */
 @RestrictTo(RestrictTo.Scope.LIBRARY_GROUP)
-public abstract class TiledDataSource<T> extends PositionalDataSource<T> {
-
+@Deprecated("Use {@link PositionalDataSource}\n" + "  ")
+internal abstract class TiledDataSource<T> : PositionalDataSource<T>() {
     @WorkerThread
-    public abstract int countItems();
+    abstract fun countItems(): Int
 
-    @Override
-    boolean isContiguous() {
-        return false;
+    override fun isContiguous(): Boolean {
+        return false
     }
 
-    @Nullable
     @WorkerThread
-    public abstract List<T> loadRange(int startPosition, int count);
+    abstract fun loadRange(startPosition: Int, count: Int): List<T>?
 
-    @Override
-    public void loadInitial(@NonNull LoadInitialParams params,
-            @NonNull LoadInitialCallback<T> callback) {
-        int totalCount = countItems();
+    override fun loadInitial(
+        params: LoadInitialParams,
+        callback: LoadInitialCallback<T>
+    ) {
+        val totalCount = countItems()
         if (totalCount == 0) {
-            callback.onResult(Collections.<T>emptyList(), 0, 0);
-            return;
+            callback.onResult(emptyList(), 0, 0)
+            return
         }
-
         // bound the size requested, based on known count
-        final int firstLoadPosition = computeInitialLoadPosition(params, totalCount);
-        final int firstLoadSize = computeInitialLoadSize(params, firstLoadPosition, totalCount);
-
+        val firstLoadPosition = computeInitialLoadPosition(params, totalCount)
+        val firstLoadSize = computeInitialLoadSize(params, firstLoadPosition, totalCount)
         // convert from legacy behavior
-        List<T> list = loadRange(firstLoadPosition, firstLoadSize);
-        if (list != null && list.size() == firstLoadSize) {
-            callback.onResult(list, firstLoadPosition, totalCount);
-        } else {
-            // null list, or size doesn't match request
-            // The size check is a WAR for Room 1.0, subsequent versions do the check in Room
-            invalidate();
+        val list = loadRange(firstLoadPosition, firstLoadSize)
+        if (list != null && list.size == firstLoadSize) {
+            callback.onResult(list, firstLoadPosition, totalCount)
+        } else { // null list, or size doesn't match request
+// The size check is a WAR for Room 1.0, subsequent versions do the check in Room
+            invalidate()
         }
     }
 
-    @Override
-    public void loadRange(@NonNull LoadRangeParams params,
-            @NonNull LoadRangeCallback<T> callback) {
-        List<T> list = loadRange(params.startPosition, params.loadSize);
+    override fun loadRange(
+        params: LoadRangeParams,
+        callback: LoadRangeCallback<T>
+    ) {
+        val list = loadRange(params.startPosition, params.loadSize)
         if (list != null) {
-            callback.onResult(list);
+            callback.onResult(list)
         } else {
-            invalidate();
+            invalidate()
         }
     }
 }

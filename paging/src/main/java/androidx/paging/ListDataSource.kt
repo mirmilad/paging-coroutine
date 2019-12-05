@@ -13,39 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.paging
 
-package androidx.paging;
+import java.util.*
 
-import androidx.annotation.NonNull;
-
-import java.util.ArrayList;
-import java.util.List;
-
-class ListDataSource<T> extends PositionalDataSource<T> {
-    private final List<T> mList;
-
-    public ListDataSource(List<T> list) {
-        mList = new ArrayList<>(list);
-    }
-
-    @Override
-    public void loadInitial(@NonNull LoadInitialParams params,
-            @NonNull LoadInitialCallback<T> callback) {
-        final int totalCount = mList.size();
-
-        final int position = computeInitialLoadPosition(params, totalCount);
-        final int loadSize = computeInitialLoadSize(params, position, totalCount);
-
+internal class ListDataSource<T>(list: List<T>?) :
+    PositionalDataSource<T>() {
+    private val mList: List<T>
+    override fun loadInitial(
+        params: LoadInitialParams,
+        callback: LoadInitialCallback<T>
+    ) {
+        val totalCount = mList.size
+        val position = computeInitialLoadPosition(params, totalCount)
+        val loadSize = computeInitialLoadSize(params, position, totalCount)
         // for simplicity, we could return everything immediately,
-        // but we tile here since it's expected behavior
-        List<T> sublist = mList.subList(position, position + loadSize);
-        callback.onResult(sublist, position, totalCount);
+// but we tile here since it's expected behavior
+        val sublist = mList.subList(position, position + loadSize)
+        callback.onResult(sublist, position, totalCount)
     }
 
-    @Override
-    public void loadRange(@NonNull LoadRangeParams params,
-            @NonNull LoadRangeCallback<T> callback) {
-        callback.onResult(mList.subList(params.startPosition,
-                params.startPosition + params.loadSize));
+    override fun loadRange(
+        params: LoadRangeParams,
+        callback: LoadRangeCallback<T>
+    ) {
+        callback.onResult(
+            mList.subList(
+                params.startPosition,
+                params.startPosition + params.loadSize
+            )
+        )
+    }
+
+    init {
+        mList = ArrayList(list!!)
     }
 }

@@ -310,7 +310,7 @@ class PageKeyedDataSourceTest {
                             previousPageKey, nextPageKey)
                 }
 
-                override fun onResult(data: MutableList<A>, previousPageKey: K?, nextPageKey: K?) {
+                override fun onResult(data: List<A>, previousPageKey: K?, nextPageKey: K?) {
                     callback.onResult(convert(data), previousPageKey, nextPageKey)
                 }
             })

@@ -13,69 +13,67 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.paging
 
-package androidx.paging;
+import androidx.arch.core.util.Function
 
-import androidx.annotation.NonNull;
-import androidx.arch.core.util.Function;
-
-import java.util.List;
-
-class WrapperPositionalDataSource<A, B> extends PositionalDataSource<B> {
-    private final PositionalDataSource<A> mSource;
-    @SuppressWarnings("WeakerAccess") /* synthetic access */
-    final Function<List<A>, List<B>> mListFunction;
-
-    WrapperPositionalDataSource(PositionalDataSource<A> source,
-            Function<List<A>, List<B>> listFunction) {
-        mSource = source;
-        mListFunction = listFunction;
+internal class WrapperPositionalDataSource<A, B>(
+    private val mSource: PositionalDataSource<A>,
+    /* synthetic access */val mListFunction: Function<List<A>, List<B>>
+) : PositionalDataSource<B>() {
+    override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
+        mSource.addInvalidatedCallback(onInvalidatedCallback)
     }
 
-    @Override
-    public void addInvalidatedCallback(@NonNull InvalidatedCallback onInvalidatedCallback) {
-        mSource.addInvalidatedCallback(onInvalidatedCallback);
+    override fun removeInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
+        mSource.removeInvalidatedCallback(onInvalidatedCallback)
     }
 
-    @Override
-    public void removeInvalidatedCallback(@NonNull InvalidatedCallback onInvalidatedCallback) {
-        mSource.removeInvalidatedCallback(onInvalidatedCallback);
+    override fun invalidate() {
+        mSource.invalidate()
     }
 
-    @Override
-    public void invalidate() {
-        mSource.invalidate();
+    override fun isInvalid(): Boolean {
+        return mSource.isInvalid
     }
 
-    @Override
-    public boolean isInvalid() {
-        return mSource.isInvalid();
+    override fun loadInitial(
+        params: LoadInitialParams,
+        callback: LoadInitialCallback<B>
+    ) {
+        mSource.loadInitial(
+            params,
+            object : LoadInitialCallback<A>() {
+                override fun onResult(
+                    data: List<A>,
+                    position: Int,
+                    totalCount: Int
+                ) {
+                    callback.onResult(
+                        convert(mListFunction, data),
+                        position,
+                        totalCount
+                    )
+                }
+
+                override fun onResult(data: List<A>, position: Int) {
+                    callback.onResult(
+                        convert(mListFunction, data),
+                        position
+                    )
+                }
+            })
     }
 
-    @Override
-    public void loadInitial(@NonNull LoadInitialParams params,
-            final @NonNull LoadInitialCallback<B> callback) {
-        mSource.loadInitial(params, new LoadInitialCallback<A>() {
-            @Override
-            public void onResult(@NonNull List<A> data, int position, int totalCount) {
-                callback.onResult(convert(mListFunction, data), position, totalCount);
+    override fun loadRange(
+        params: LoadRangeParams,
+        callback: LoadRangeCallback<B>
+    ) {
+        mSource.loadRange(params, object : LoadRangeCallback<A>() {
+            override fun onResult(data: List<A>) {
+                callback.onResult(convert(mListFunction, data))
             }
-
-            @Override
-            public void onResult(@NonNull List<A> data, int position) {
-                callback.onResult(convert(mListFunction, data), position);
-            }
-        });
+        })
     }
 
-    @Override
-    public void loadRange(@NonNull LoadRangeParams params,
-            final @NonNull LoadRangeCallback<B> callback) {
-        mSource.loadRange(params, new LoadRangeCallback<A>() {
-            @Override
-            public void onResult(@NonNull List<A> data) {
-                callback.onResult(convert(mListFunction, data));
-            }
-        });
-    }
 }

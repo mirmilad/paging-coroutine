@@ -13,104 +13,90 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.paging
 
-package androidx.paging;
+import androidx.arch.core.util.Function
+import java.util.*
 
-import androidx.annotation.NonNull;
-import androidx.arch.core.util.Function;
-
-import java.util.IdentityHashMap;
-import java.util.List;
-
-class WrapperItemKeyedDataSource<K, A, B> extends ItemKeyedDataSource<K, B> {
-    private final ItemKeyedDataSource<K, A> mSource;
-    @SuppressWarnings("WeakerAccess") /* synthetic access */
-    final Function<List<A>, List<B>> mListFunction;
-
-    private final IdentityHashMap<B, K> mKeyMap = new IdentityHashMap<>();
-
-    WrapperItemKeyedDataSource(ItemKeyedDataSource<K, A> source,
-            Function<List<A>, List<B>> listFunction) {
-        mSource = source;
-        mListFunction = listFunction;
+internal class WrapperItemKeyedDataSource<K, A, B>(
+    private val mSource: ItemKeyedDataSource<K, A>,
+    /* synthetic access */val mListFunction: Function<List<A>, List<B>>
+) : ItemKeyedDataSource<K, B>() {
+    private val mKeyMap = IdentityHashMap<B, K>()
+    override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
+        mSource.addInvalidatedCallback(onInvalidatedCallback)
     }
 
-    @Override
-    public void addInvalidatedCallback(@NonNull InvalidatedCallback onInvalidatedCallback) {
-        mSource.addInvalidatedCallback(onInvalidatedCallback);
+    override fun removeInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
+        mSource.removeInvalidatedCallback(onInvalidatedCallback)
     }
 
-    @Override
-    public void removeInvalidatedCallback(@NonNull InvalidatedCallback onInvalidatedCallback) {
-        mSource.removeInvalidatedCallback(onInvalidatedCallback);
+    override fun invalidate() {
+        mSource.invalidate()
     }
 
-    @Override
-    public void invalidate() {
-        mSource.invalidate();
+    override fun isInvalid(): Boolean {
+        return mSource.isInvalid
     }
 
-    @Override
-    public boolean isInvalid() {
-        return mSource.isInvalid();
-    }
-
-    @SuppressWarnings("WeakerAccess") /* synthetic access */
-    List<B> convertWithStashedKeys(List<A> source) {
-        List<B> dest = convert(mListFunction, source);
-        synchronized (mKeyMap) {
+    fun  /* synthetic access */convertWithStashedKeys(source: List<A>): List<B> {
+        val dest =
+            convert(mListFunction, source)
+        synchronized(mKeyMap) {
             // synchronize on mKeyMap, since multiple loads may occur simultaneously.
             // Note: manually sync avoids locking per-item (e.g. Collections.synchronizedMap)
-            for (int i = 0; i < dest.size(); i++) {
-                mKeyMap.put(dest.get(i), mSource.getKey(source.get(i)));
+            for (i in dest.indices) {
+                mKeyMap[dest[i]] = mSource.getKey(source[i])
             }
         }
-        return dest;
+        return dest
     }
 
-    @Override
-    public void loadInitial(@NonNull LoadInitialParams<K> params,
-            final @NonNull LoadInitialCallback<B> callback) {
-        mSource.loadInitial(params, new LoadInitialCallback<A>() {
-            @Override
-            public void onResult(@NonNull List<A> data, int position, int totalCount) {
-                callback.onResult(convertWithStashedKeys(data), position, totalCount);
+    override fun loadInitial(
+        params: LoadInitialParams<K>,
+        callback: LoadInitialCallback<B>
+    ) {
+        mSource.loadInitial(
+            params,
+            object : LoadInitialCallback<A>() {
+                override fun onResult(
+                    data: List<A>,
+                    position: Int,
+                    totalCount: Int
+                ) {
+                    callback.onResult(convertWithStashedKeys(data), position, totalCount)
+                }
+
+                override fun onResult(data: List<A>) {
+                    callback.onResult(convertWithStashedKeys(data))
+                }
+            })
+    }
+
+    override fun loadAfter(
+        params: LoadParams<K>,
+        callback: LoadCallback<B>
+    ) {
+        mSource.loadAfter(params, object : LoadCallback<A>() {
+            override fun onResult(data: List<A>) {
+                callback.onResult(convertWithStashedKeys(data))
             }
+        })
+    }
 
-            @Override
-            public void onResult(@NonNull List<A> data) {
-                callback.onResult(convertWithStashedKeys(data));
+    override fun loadBefore(
+        params: LoadParams<K>,
+        callback: LoadCallback<B>
+    ) {
+        mSource.loadBefore(params, object : LoadCallback<A>() {
+            override fun onResult(data: List<A>) {
+                callback.onResult(convertWithStashedKeys(data))
             }
-        });
+        })
     }
 
-    @Override
-    public void loadAfter(@NonNull LoadParams<K> params,
-            final @NonNull LoadCallback<B> callback) {
-        mSource.loadAfter(params, new LoadCallback<A>() {
-            @Override
-            public void onResult(@NonNull List<A> data) {
-                callback.onResult(convertWithStashedKeys(data));
-            }
-        });
+    override fun getKey(item: B): K {
+        synchronized(mKeyMap) { return mKeyMap[item]!! }
     }
 
-    @Override
-    public void loadBefore(@NonNull LoadParams<K> params,
-            final @NonNull LoadCallback<B> callback) {
-        mSource.loadBefore(params, new LoadCallback<A>() {
-            @Override
-            public void onResult(@NonNull List<A> data) {
-                callback.onResult(convertWithStashedKeys(data));
-            }
-        });
-    }
-
-    @NonNull
-    @Override
-    public K getKey(@NonNull B item) {
-        synchronized (mKeyMap) {
-            return mKeyMap.get(item);
-        }
-    }
 }

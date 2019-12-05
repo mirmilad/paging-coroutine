@@ -16,7 +16,7 @@
 
 package androidx.paging
 
-class AsyncListDataSource<T>(list: List<T>)
+internal class AsyncListDataSource<T>(list: List<T>)
     : PositionalDataSource<T>() {
     private val workItems: MutableList<() -> Unit> = ArrayList()
     private val listDataSource = ListDataSource(list)

@@ -16,38 +16,40 @@
 
 package androidx.paging;
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
+import java.util.concurrent.Executor
 
-import java.util.concurrent.Executor;
 
-abstract class ContiguousDataSource<Key, Value> extends DataSource<Key, Value> {
-    @Override
-    boolean isContiguous() {
+internal abstract class ContiguousDataSource<Key, Value> : DataSource<Key, Value>() {
+
+
+    override fun isContiguous(): Boolean {
         return true;
     }
 
-    abstract void dispatchLoadInitial(
-            @Nullable Key key,
-            int initialLoadSize,
-            int pageSize,
-            boolean enablePlaceholders,
-            @NonNull Executor mainThreadExecutor,
-            @NonNull PageResult.Receiver<Value> receiver);
+    abstract fun dispatchLoadInitial(
+        key: Key?,
+        initialLoadSize: Int,
+        pageSize: Int,
+        enablePlaceholders: Boolean,
+        mainThreadExecutor: Executor,
+        receiver: PageResult.Receiver<Value>
+    )
 
-    abstract void dispatchLoadAfter(
-            int currentEndIndex,
-            @NonNull Value currentEndItem,
-            int pageSize,
-            @NonNull Executor mainThreadExecutor,
-            @NonNull PageResult.Receiver<Value> receiver);
+    abstract fun dispatchLoadAfter(
+        currentEndIndex: Int,
+        currentEndItem: Value,
+        pageSize: Int,
+        mainThreadExecutor: Executor,
+        receiver: PageResult.Receiver<Value>
+    )
 
-    abstract void dispatchLoadBefore(
-            int currentBeginIndex,
-            @NonNull Value currentBeginItem,
-            int pageSize,
-            @NonNull Executor mainThreadExecutor,
-            @NonNull PageResult.Receiver<Value> receiver);
+    abstract fun dispatchLoadBefore(
+        currentBeginIndex: Int,
+        currentBeginItem: Value,
+        pageSize: Int,
+        mainThreadExecutor: Executor,
+        receiver: PageResult.Receiver<Value>
+    );
 
     /**
      * Get the key from either the position, or item, or null if position/item invalid.
@@ -55,9 +57,7 @@ abstract class ContiguousDataSource<Key, Value> extends DataSource<Key, Value> {
      * Position may not match passed item's position - if trying to query the key from a position
      * that isn't yet loaded, a fallback item (last loaded item accessed) will be passed.
      */
-    abstract Key getKey(int position, Value item);
+    internal abstract fun getKey(position: Int, item: Value?): Key?
 
-    boolean supportsPageDropping() {
-        return true;
-    }
+    open fun supportsPageDropping() = true
 }

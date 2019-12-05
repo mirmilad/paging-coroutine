@@ -13,363 +13,395 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.paging
 
-package androidx.paging;
-
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.arch.core.util.Function;
-
-import java.util.List;
-import java.util.concurrent.Executor;
+import androidx.arch.core.util.Function
+import androidx.paging.PageResult.ResultType
+import java.util.concurrent.Executor
 
 /**
  * Incremental data loader for paging keyed content, where loaded content uses previously loaded
  * items as input to future loads.
- * <p>
- * Implement a DataSource using ItemKeyedDataSource if you need to use data from item {@code N - 1}
- * to load item {@code N}. This is common, for example, in sorted database queries where
+ *
+ *
+ * Implement a DataSource using ItemKeyedDataSource if you need to use data from item `N - 1`
+ * to load item `N`. This is common, for example, in sorted database queries where
  * attributes of the item such just before the next query define how to execute it.
- * <p>
- * The {@code InMemoryByItemRepository} in the
- * <a href="https://github.com/googlesamples/android-architecture-components/blob/master/PagingWithNetworkSample/README.md">PagingWithNetworkSample</a>
+ *
+ *
+ * The `InMemoryByItemRepository` in the
+ * [PagingWithNetworkSample](https://github.com/googlesamples/android-architecture-components/blob/master/PagingWithNetworkSample/README.md)
  * shows how to implement a network ItemKeyedDataSource using
- * <a href="https://square.github.io/retrofit/">Retrofit</a>, while
+ * [Retrofit](https://square.github.io/retrofit/), while
  * handling swipe-to-refresh, network errors, and retry.
  *
  * @param <Key> Type of data used to query Value types out of the DataSource.
  * @param <Value> Type of items being loaded by the DataSource.
- */
-public abstract class ItemKeyedDataSource<Key, Value> extends ContiguousDataSource<Key, Value> {
-
+</Value></Key> */
+internal abstract class ItemKeyedDataSource<Key, Value> :
+    ContiguousDataSource<Key, Value>() {
     /**
-     * Holder object for inputs to {@link #loadInitial(LoadInitialParams, LoadInitialCallback)}.
+     * Holder object for inputs to [.loadInitial].
      *
      * @param <Key> Type of data used to query Value types out of the DataSource.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static class LoadInitialParams<Key> {
+    </Key> */
+    class LoadInitialParams<Key>(
         /**
-         * Load items around this key, or at the beginning of the data set if {@code null} is
+         * Load items around this key, or at the beginning of the data set if `null` is
          * passed.
-         * <p>
+         *
+         *
          * Note that this key is generally a hint, and may be ignored if you want to always load
          * from the beginning.
          */
-        @Nullable
-        public final Key requestedInitialKey;
-
+        val requestedInitialKey: Key?,
         /**
          * Requested number of items to load.
-         * <p>
+         *
+         *
          * Note that this may be larger than available data.
          */
-        public final int requestedLoadSize;
-
+        val requestedLoadSize: Int,
         /**
          * Defines whether placeholders are enabled, and whether the total count passed to
-         * {@link LoadInitialCallback#onResult(List, int, int)} will be ignored.
+         * [LoadInitialCallback.onResult] will be ignored.
          */
-        public final boolean placeholdersEnabled;
-
-
-        public LoadInitialParams(@Nullable Key requestedInitialKey, int requestedLoadSize,
-                boolean placeholdersEnabled) {
-            this.requestedInitialKey = requestedInitialKey;
-            this.requestedLoadSize = requestedLoadSize;
-            this.placeholdersEnabled = placeholdersEnabled;
-        }
-    }
+        val placeholdersEnabled: Boolean
+    )
 
     /**
-     * Holder object for inputs to {@link #loadBefore(LoadParams, LoadCallback)}
-     * and {@link #loadAfter(LoadParams, LoadCallback)}.
+     * Holder object for inputs to [.loadBefore]
+     * and [.loadAfter].
      *
      * @param <Key> Type of data used to query Value types out of the DataSource.
-     */
-    @SuppressWarnings("WeakerAccess")
-    public static class LoadParams<Key> {
+    </Key> */
+    class LoadParams<Key>(
         /**
          * Load items before/after this key.
-         * <p>
+         *
+         *
          * Returned data must begin directly adjacent to this position.
          */
-        @NonNull
-        public final Key key;
+        val key: Key,
         /**
          * Requested number of items to load.
-         * <p>
+         *
+         *
          * Returned page can be of this size, but it may be altered if that is easier, e.g. a
          * network data source where the backend defines page size.
          */
-        public final int requestedLoadSize;
-
-        public LoadParams(@NonNull Key key, int requestedLoadSize) {
-            this.key = key;
-            this.requestedLoadSize = requestedLoadSize;
-        }
-    }
+        val requestedLoadSize: Int
+    )
 
     /**
-     * Callback for {@link #loadInitial(LoadInitialParams, LoadInitialCallback)}
+     * Callback for [.loadInitial]
      * to return data and, optionally, position/count information.
-     * <p>
+     *
+     *
      * A callback can be called only once, and will throw if called again.
-     * <p>
+     *
+     *
      * If you can compute the number of items in the data set before and after the loaded range,
-     * call the three parameter {@link #onResult(List, int, int)} to pass that information. You
-     * can skip passing this information by calling the single parameter {@link #onResult(List)},
-     * either if it's difficult to compute, or if {@link LoadInitialParams#placeholdersEnabled} is
-     * {@code false}, so the positioning information will be ignored.
-     * <p>
+     * call the three parameter [.onResult] to pass that information. You
+     * can skip passing this information by calling the single parameter [.onResult],
+     * either if it's difficult to compute, or if [placeholdersEnabled] is
+     * `false`, so the positioning information will be ignored.
+     *
+     *
      * It is always valid for a DataSource loading method that takes a callback to stash the
      * callback and call it later. This enables DataSources to be fully asynchronous, and to handle
      * temporary, recoverable error states (such as a network error that can be retried).
      *
      * @param <Value> Type of items being loaded.
-     */
-    public abstract static class LoadInitialCallback<Value> extends LoadCallback<Value> {
+    </Value> */
+    abstract class LoadInitialCallback<Value> : LoadCallback<Value>() {
         /**
          * Called to pass initial load state from a DataSource.
-         * <p>
-         * Call this method from your DataSource's {@code loadInitial} function to return data,
+         *
+         *
+         * Call this method from your DataSource's `loadInitial` function to return data,
          * and inform how many placeholders should be shown before and after. If counting is cheap
          * to compute (for example, if a network load returns the information regardless), it's
          * recommended to pass data back through this method.
-         * <p>
+         *
+         *
          * It is always valid to pass a different amount of data than what is requested. Pass an
          * empty list if there is no more data to load.
          *
          * @param data List of items loaded from the DataSource. If this is empty, the DataSource
-         *             is treated as empty, and no further loads will occur.
-         * @param position Position of the item at the front of the list. If there are {@code N}
-         *                 items before the items in data that can be loaded from this DataSource,
-         *                 pass {@code N}.
+         * is treated as empty, and no further loads will occur.
+         * @param position Position of the item at the front of the list. If there are `N`
+         * items before the items in data that can be loaded from this DataSource,
+         * pass `N`.
          * @param totalCount Total number of items that may be returned from this DataSource.
-         *                   Includes the number in the initial {@code data} parameter
-         *                   as well as any items that can be loaded in front or behind of
-         *                   {@code data}.
+         * Includes the number in the initial `data` parameter
+         * as well as any items that can be loaded in front or behind of
+         * `data`.
          */
-        public abstract void onResult(@NonNull List<Value> data, int position, int totalCount);
+        abstract fun onResult(
+            data: List<Value>,
+            position: Int,
+            totalCount: Int
+        )
     }
 
-
     /**
-     * Callback for ItemKeyedDataSource {@link #loadBefore(LoadParams, LoadCallback)}
-     * and {@link #loadAfter(LoadParams, LoadCallback)} to return data.
-     * <p>
+     * Callback for ItemKeyedDataSource [.loadBefore]
+     * and [.loadAfter] to return data.
+     *
+     *
      * A callback can be called only once, and will throw if called again.
-     * <p>
+     *
+     *
      * It is always valid for a DataSource loading method that takes a callback to stash the
      * callback and call it later. This enables DataSources to be fully asynchronous, and to handle
      * temporary, recoverable error states (such as a network error that can be retried).
      *
      * @param <Value> Type of items being loaded.
-     */
-    public abstract static class LoadCallback<Value> {
+    </Value> */
+    abstract class LoadCallback<Value> {
         /**
          * Called to pass loaded data from a DataSource.
-         * <p>
+         *
+         *
          * Call this method from your ItemKeyedDataSource's
-         * {@link #loadBefore(LoadParams, LoadCallback)} and
-         * {@link #loadAfter(LoadParams, LoadCallback)} methods to return data.
-         * <p>
-         * Call this from {@link #loadInitial(LoadInitialParams, LoadInitialCallback)} to
+         * [.loadBefore] and
+         * [.loadAfter] methods to return data.
+         *
+         *
+         * Call this from [.loadInitial] to
          * initialize without counting available data, or supporting placeholders.
-         * <p>
+         *
+         *
          * It is always valid to pass a different amount of data than what is requested. Pass an
          * empty list if there is no more data to load.
          *
          * @param data List of items loaded from the ItemKeyedDataSource.
          */
-        public abstract void onResult(@NonNull List<Value> data);
+        abstract fun onResult(data: List<Value>)
     }
 
-    static class LoadInitialCallbackImpl<Value> extends LoadInitialCallback<Value> {
-        final LoadCallbackHelper<Value> mCallbackHelper;
-        private final boolean mCountingEnabled;
-        LoadInitialCallbackImpl(@NonNull ItemKeyedDataSource dataSource, boolean countingEnabled,
-                @NonNull PageResult.Receiver<Value> receiver) {
-            mCallbackHelper = new LoadCallbackHelper<>(dataSource, PageResult.INIT, null, receiver);
-            mCountingEnabled = countingEnabled;
-        }
+    internal class LoadInitialCallbackImpl<Value>(
+        dataSource: ItemKeyedDataSource<*, *>, countingEnabled: Boolean,
+        receiver: PageResult.Receiver<Value>
+    ) :
+        LoadInitialCallback<Value>() {
+        val mCallbackHelper: LoadCallbackHelper<Value>
+        private val mCountingEnabled: Boolean
 
-        @Override
-        public void onResult(@NonNull List<Value> data, int position, int totalCount) {
+        override fun onResult(
+            data: List<Value>,
+            position: Int,
+            totalCount: Int
+        ) {
             if (!mCallbackHelper.dispatchInvalidResultIfInvalid()) {
-                LoadCallbackHelper.validateInitialLoadParams(data, position, totalCount);
-
-                int trailingUnloadedCount = totalCount - position - data.size();
+                LoadCallbackHelper.validateInitialLoadParams(data, position, totalCount)
+                val trailingUnloadedCount = totalCount - position - data.size
                 if (mCountingEnabled) {
-                    mCallbackHelper.dispatchResultToReceiver(new PageResult<>(
-                            data, position, trailingUnloadedCount, 0));
+                    mCallbackHelper.dispatchResultToReceiver(
+                        PageResult(
+                            data, position, trailingUnloadedCount, 0
+                        )
+                    )
                 } else {
-                    mCallbackHelper.dispatchResultToReceiver(new PageResult<>(data, position));
+                    mCallbackHelper.dispatchResultToReceiver(PageResult(data, position))
                 }
             }
         }
 
-        @Override
-        public void onResult(@NonNull List<Value> data) {
+        override fun onResult(data: List<Value>) {
             if (!mCallbackHelper.dispatchInvalidResultIfInvalid()) {
-                mCallbackHelper.dispatchResultToReceiver(new PageResult<>(data, 0, 0, 0));
+                mCallbackHelper.dispatchResultToReceiver(PageResult(data, 0, 0, 0))
             }
         }
+
+        init {
+            mCallbackHelper =
+                LoadCallbackHelper(dataSource, PageResult.INIT, null, receiver)
+            mCountingEnabled = countingEnabled
+        }
     }
 
-    static class LoadCallbackImpl<Value> extends LoadCallback<Value> {
-        final LoadCallbackHelper<Value> mCallbackHelper;
-
-        LoadCallbackImpl(@NonNull ItemKeyedDataSource dataSource, @PageResult.ResultType int type,
-                @Nullable Executor mainThreadExecutor,
-                @NonNull PageResult.Receiver<Value> receiver) {
-            mCallbackHelper = new LoadCallbackHelper<>(
-                    dataSource, type, mainThreadExecutor, receiver);
-        }
-
-        @Override
-        public void onResult(@NonNull List<Value> data) {
+    internal class LoadCallbackImpl<Value>(
+        dataSource: ItemKeyedDataSource<*, *>, @ResultType type: Int,
+        mainThreadExecutor: Executor?,
+        receiver: PageResult.Receiver<Value>
+    ) :
+        LoadCallback<Value>() {
+        val mCallbackHelper: LoadCallbackHelper<Value>
+        override fun onResult(data: List<Value>) {
             if (!mCallbackHelper.dispatchInvalidResultIfInvalid()) {
-                mCallbackHelper.dispatchResultToReceiver(new PageResult<>(data, 0, 0, 0));
+                mCallbackHelper.dispatchResultToReceiver(PageResult(data, 0, 0, 0))
             }
         }
-    }
 
-    @Nullable
-    @Override
-    final Key getKey(int position, Value item) {
-        if (item == null) {
-            return null;
+        init {
+            mCallbackHelper = LoadCallbackHelper(
+                dataSource, type, mainThreadExecutor, receiver
+            )
         }
-
-        return getKey(item);
     }
 
-    @Override
-    final void dispatchLoadInitial(@Nullable Key key, int initialLoadSize, int pageSize,
-            boolean enablePlaceholders, @NonNull Executor mainThreadExecutor,
-            @NonNull PageResult.Receiver<Value> receiver) {
-        LoadInitialCallbackImpl<Value> callback =
-                new LoadInitialCallbackImpl<>(this, enablePlaceholders, receiver);
-        loadInitial(new LoadInitialParams<>(key, initialLoadSize, enablePlaceholders), callback);
+    override fun getKey(position: Int, item: Value?): Key? {
+        return item?.let { getKey(it) }
+    }
 
+    override fun dispatchLoadInitial(
+        key: Key?, initialLoadSize: Int, pageSize: Int,
+        enablePlaceholders: Boolean, mainThreadExecutor: Executor,
+        receiver: PageResult.Receiver<Value>
+    ) {
+        val callback =
+            LoadInitialCallbackImpl(
+                this,
+                enablePlaceholders,
+                receiver
+            )
+        loadInitial(
+            LoadInitialParams(
+                key,
+                initialLoadSize,
+                enablePlaceholders
+            ), callback
+        )
         // If initialLoad's callback is not called within the body, we force any following calls
-        // to post to the UI thread. This constructor may be run on a background thread, but
-        // after constructor, mutation must happen on UI thread.
-        callback.mCallbackHelper.setPostExecutor(mainThreadExecutor);
+// to post to the UI thread. This constructor may be run on a background thread, but
+// after constructor, mutation must happen on UI thread.
+        callback.mCallbackHelper.setPostExecutor(mainThreadExecutor)
     }
 
-    @Override
-    final void dispatchLoadAfter(int currentEndIndex, @NonNull Value currentEndItem,
-            int pageSize, @NonNull Executor mainThreadExecutor,
-            @NonNull PageResult.Receiver<Value> receiver) {
-        loadAfter(new LoadParams<>(getKey(currentEndItem), pageSize),
-                new LoadCallbackImpl<>(this, PageResult.APPEND, mainThreadExecutor, receiver));
+    override fun dispatchLoadAfter(
+        currentEndIndex: Int, currentEndItem: Value,
+        pageSize: Int, mainThreadExecutor: Executor,
+        receiver: PageResult.Receiver<Value>
+    ) {
+        loadAfter(
+            LoadParams(getKey(currentEndItem), pageSize),
+            LoadCallbackImpl(this, PageResult.APPEND, mainThreadExecutor, receiver)
+        )
     }
 
-    @Override
-    final void dispatchLoadBefore(int currentBeginIndex, @NonNull Value currentBeginItem,
-            int pageSize, @NonNull Executor mainThreadExecutor,
-            @NonNull PageResult.Receiver<Value> receiver) {
-        loadBefore(new LoadParams<>(getKey(currentBeginItem), pageSize),
-                new LoadCallbackImpl<>(this, PageResult.PREPEND, mainThreadExecutor, receiver));
+    override fun dispatchLoadBefore(
+        currentBeginIndex: Int, currentBeginItem: Value,
+        pageSize: Int, mainThreadExecutor: Executor,
+        receiver: PageResult.Receiver<Value>
+    ) {
+        loadBefore(
+            LoadParams(getKey(currentBeginItem), pageSize),
+            LoadCallbackImpl(this, PageResult.PREPEND, mainThreadExecutor, receiver)
+        )
     }
 
     /**
      * Load initial data.
-     * <p>
+     *
+     *
      * This method is called first to initialize a PagedList with data. If it's possible to count
      * the items that can be loaded by the DataSource, it's recommended to pass the loaded data to
      * the callback via the three-parameter
-     * {@link LoadInitialCallback#onResult(List, int, int)}. This enables PagedLists
+     * [LoadInitialCallback.onResult]. This enables PagedLists
      * presenting data from this source to display placeholders to represent unloaded items.
-     * <p>
-     * {@link LoadInitialParams#requestedInitialKey} and {@link LoadInitialParams#requestedLoadSize}
+     *
+     *
+     * [requestedInitialKey] and [requestedLoadSize]
      * are hints, not requirements, so they may be altered or ignored. Note that ignoring the
-     * {@code requestedInitialKey} can prevent subsequent PagedList/DataSource pairs from
+     * `requestedInitialKey` can prevent subsequent PagedList/DataSource pairs from
      * initializing at the same location. If your data source never invalidates (for example,
      * loading from the network without the network ever signalling that old data must be reloaded),
-     * it's fine to ignore the {@code initialLoadKey} and always start from the beginning of the
+     * it's fine to ignore the `initialLoadKey` and always start from the beginning of the
      * data set.
      *
      * @param params Parameters for initial load, including initial key and requested size.
      * @param callback Callback that receives initial load data.
      */
-    public abstract void loadInitial(@NonNull LoadInitialParams<Key> params,
-            @NonNull LoadInitialCallback<Value> callback);
+    abstract fun loadInitial(
+        params: LoadInitialParams<Key>,
+        callback: LoadInitialCallback<Value>
+    )
 
     /**
-     * Load list data after the key specified in {@link LoadParams#key LoadParams.key}.
-     * <p>
+     * Load list data after the key specified in [key].
+     *
+     *
      * It's valid to return a different list size than the page size if it's easier, e.g. if your
      * backend defines page sizes. It is generally safer to increase the number loaded than reduce.
-     * <p>
+     *
+     *
      * Data may be passed synchronously during the loadAfter method, or deferred and called at a
      * later time. Further loads going down will be blocked until the callback is called.
-     * <p>
+     *
+     *
      * If data cannot be loaded (for example, if the request is invalid, or the data would be stale
-     * and inconsistent, it is valid to call {@link #invalidate()} to invalidate the data source,
+     * and inconsistent, it is valid to call [.invalidate] to invalidate the data source,
      * and prevent further loading.
      *
      * @param params Parameters for the load, including the key to load after, and requested size.
      * @param callback Callback that receives loaded data.
      */
-    public abstract void loadAfter(@NonNull LoadParams<Key> params,
-            @NonNull LoadCallback<Value> callback);
+    abstract fun loadAfter(
+        params: LoadParams<Key>,
+        callback: LoadCallback<Value>
+    )
 
     /**
-     * Load list data before the key specified in {@link LoadParams#key LoadParams.key}.
-     * <p>
+     * Load list data before the key specified in [key].
+     *
+     *
      * It's valid to return a different list size than the page size if it's easier, e.g. if your
      * backend defines page sizes. It is generally safer to increase the number loaded than reduce.
-     * <p>
-     * <p class="note"><strong>Note:</strong> Data returned will be prepended just before the key
+     *
+     *
+     *
+     * **Note:** Data returned will be prepended just before the key
      * passed, so if you vary size, ensure that the last item is adjacent to the passed key.
-     * <p>
+     *
+     *
      * Data may be passed synchronously during the loadBefore method, or deferred and called at a
      * later time. Further loads going up will be blocked until the callback is called.
-     * <p>
+     *
+     *
      * If data cannot be loaded (for example, if the request is invalid, or the data would be stale
-     * and inconsistent, it is valid to call {@link #invalidate()} to invalidate the data source,
+     * and inconsistent, it is valid to call [.invalidate] to invalidate the data source,
      * and prevent further loading.
      *
      * @param params Parameters for the load, including the key to load before, and requested size.
      * @param callback Callback that receives loaded data.
      */
-    public abstract void loadBefore(@NonNull LoadParams<Key> params,
-            @NonNull LoadCallback<Value> callback);
+    abstract fun loadBefore(
+        params: LoadParams<Key>,
+        callback: LoadCallback<Value>
+    )
 
     /**
      * Return a key associated with the given item.
-     * <p>
+     *
+     *
      * If your ItemKeyedDataSource is loading from a source that is sorted and loaded by a unique
-     * integer ID, you would return {@code item.getID()} here. This key can then be passed to
-     * {@link #loadBefore(LoadParams, LoadCallback)} or
-     * {@link #loadAfter(LoadParams, LoadCallback)} to load additional items adjacent to the item
+     * integer ID, you would return `item.getID()` here. This key can then be passed to
+     * [.loadBefore] or
+     * [.loadAfter] to load additional items adjacent to the item
      * passed to this function.
-     * <p>
+     *
+     *
      * If your key is more complex, such as when you're sorting by name, then resolving collisions
      * with integer ID, you'll need to return both. In such a case you would use a wrapper class,
-     * such as {@code Pair<String, Integer>} or, in Kotlin,
-     * {@code data class Key(val name: String, val id: Int)}
+     * such as `Pair<String, Integer>` or, in Kotlin,
+     * `data class Key(val name: String, val id: Int)`
      *
      * @param item Item to get the key from.
      * @return Key associated with given item.
      */
-    @NonNull
-    public abstract Key getKey(@NonNull Value item);
+    abstract fun getKey(item: Value): Key
 
-    @NonNull
-    @Override
-    public final <ToValue> ItemKeyedDataSource<Key, ToValue> mapByPage(
-            @NonNull Function<List<Value>, List<ToValue>> function) {
-        return new WrapperItemKeyedDataSource<>(this, function);
+    override fun <ToValue> mapByPage(
+        function: Function<List<Value>, List<ToValue>>
+    ): ItemKeyedDataSource<Key, ToValue> {
+        return WrapperItemKeyedDataSource(this, function)
     }
 
-    @NonNull
-    @Override
-    public final <ToValue> ItemKeyedDataSource<Key, ToValue> map(
-            @NonNull Function<Value, ToValue> function) {
-        return mapByPage(createListFunction(function));
+    override fun <ToValue> map(
+        function: Function<Value, ToValue>
+    ): ItemKeyedDataSource<Key, ToValue> {
+        return mapByPage(createListFunction(function))
     }
 }

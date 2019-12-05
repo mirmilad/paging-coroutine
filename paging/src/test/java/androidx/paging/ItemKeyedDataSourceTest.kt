@@ -192,8 +192,8 @@ class ItemKeyedDataSourceTest {
                 ItemKeyedDataSource.LoadParams(dataSource.getKey(ITEMS_BY_NAME_ID[5]), 5), callback)
 
         @Suppress("UNCHECKED_CAST")
-        val argument = ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<Item>>
-        verify(callback).onResult(argument.capture())
+        val argument = argumentCaptor<List<Item>>() //ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<Item>>
+        verify(callback).onResult(argument.captureForKotlin())
         verifyNoMoreInteractions(callback)
 
         val observed = argument.value
@@ -359,7 +359,7 @@ class ItemKeyedDataSourceTest {
                     callback.onResult(convert(data), position, totalCount)
                 }
 
-                override fun onResult(data: MutableList<A>) {
+                override fun onResult(data: List<A>) {
                     callback.onResult(convert(data))
                 }
             })
@@ -367,7 +367,7 @@ class ItemKeyedDataSourceTest {
 
         override fun loadAfter(params: LoadParams<K>, callback: LoadCallback<B>) {
             source.loadAfter(params, object : LoadCallback<A>() {
-                override fun onResult(data: MutableList<A>) {
+                override fun onResult(data: List<A>) {
                     callback.onResult(convert(data))
                 }
             })
@@ -375,7 +375,7 @@ class ItemKeyedDataSourceTest {
 
         override fun loadBefore(params: LoadParams<K>, callback: LoadCallback<B>) {
             source.loadBefore(params, object : LoadCallback<A>() {
-                override fun onResult(data: MutableList<A>) {
+                override fun onResult(data: List<A>) {
                     callback.onResult(convert(data))
                 }
             })

@@ -13,84 +13,93 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package androidx.paging
 
-package androidx.paging;
+import androidx.arch.core.util.Function
 
-import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-import androidx.arch.core.util.Function;
-
-import java.util.List;
-
-class WrapperPageKeyedDataSource<K, A, B> extends PageKeyedDataSource<K, B> {
-    private final PageKeyedDataSource<K, A> mSource;
-    @SuppressWarnings("WeakerAccess") /* synthetic access */
-    final Function<List<A>, List<B>> mListFunction;
-
-    WrapperPageKeyedDataSource(PageKeyedDataSource<K, A> source,
-            Function<List<A>, List<B>> listFunction) {
-        mSource = source;
-        mListFunction = listFunction;
+internal class WrapperPageKeyedDataSource<K, A, B>(
+    private val mSource: PageKeyedDataSource<K, A>,
+    /* synthetic access */val mListFunction: Function<List<A>, List<B>>
+) : PageKeyedDataSource<K, B>() {
+    override fun addInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
+        mSource.addInvalidatedCallback(onInvalidatedCallback)
     }
 
-    @Override
-    public void addInvalidatedCallback(@NonNull InvalidatedCallback onInvalidatedCallback) {
-        mSource.addInvalidatedCallback(onInvalidatedCallback);
+    override fun removeInvalidatedCallback(onInvalidatedCallback: InvalidatedCallback) {
+        mSource.removeInvalidatedCallback(onInvalidatedCallback)
     }
 
-    @Override
-    public void removeInvalidatedCallback(@NonNull InvalidatedCallback onInvalidatedCallback) {
-        mSource.removeInvalidatedCallback(onInvalidatedCallback);
+    override fun invalidate() {
+        mSource.invalidate()
     }
 
-    @Override
-    public void invalidate() {
-        mSource.invalidate();
+    override fun isInvalid(): Boolean {
+        return mSource.isInvalid
     }
 
-    @Override
-    public boolean isInvalid() {
-        return mSource.isInvalid();
+    override fun loadInitial(
+        params: LoadInitialParams<K>,
+        callback: LoadInitialCallback<K, B>
+    ) {
+        mSource.loadInitial(
+            params,
+            object : LoadInitialCallback<K, A>() {
+                override fun onResult(
+                    data: List<A>, position: Int, totalCount: Int,
+                    previousPageKey: K?, nextPageKey: K?
+                ) {
+                    callback.onResult(
+                        convert(mListFunction, data),
+                        position,
+                        totalCount,
+                        previousPageKey,
+                        nextPageKey
+                    )
+                }
+
+                override fun onResult(
+                    data: List<A>, previousPageKey: K?,
+                    nextPageKey: K?
+                ) {
+                    callback.onResult(
+                        convert(mListFunction, data),
+                        previousPageKey,
+                        nextPageKey
+                    )
+                }
+            })
     }
 
-    @Override
-    public void loadInitial(@NonNull LoadInitialParams<K> params,
-            final @NonNull LoadInitialCallback<K, B> callback) {
-        mSource.loadInitial(params, new LoadInitialCallback<K, A>() {
-            @Override
-            public void onResult(@NonNull List<A> data, int position, int totalCount,
-                    @Nullable K previousPageKey, @Nullable K nextPageKey) {
-                callback.onResult(convert(mListFunction, data), position, totalCount,
-                        previousPageKey, nextPageKey);
-            }
-
-            @Override
-            public void onResult(@NonNull List<A> data, @Nullable K previousPageKey,
-                    @Nullable K nextPageKey) {
-                callback.onResult(convert(mListFunction, data), previousPageKey, nextPageKey);
-            }
-        });
+    override fun loadBefore(
+        params: LoadParams<K>,
+        callback: LoadCallback<K, B>
+    ) {
+        mSource.loadBefore(
+            params,
+            object : LoadCallback<K, A>() {
+                override fun onResult(data: List<A>, adjacentPageKey: K?) {
+                    callback.onResult(
+                        convert(mListFunction, data),
+                        adjacentPageKey
+                    )
+                }
+            })
     }
 
-    @Override
-    public void loadBefore(@NonNull LoadParams<K> params,
-            final @NonNull LoadCallback<K, B> callback) {
-        mSource.loadBefore(params, new LoadCallback<K, A>() {
-            @Override
-            public void onResult(@NonNull List<A> data, @Nullable K adjacentPageKey) {
-                callback.onResult(convert(mListFunction, data), adjacentPageKey);
-            }
-        });
+    override fun loadAfter(
+        params: LoadParams<K>,
+        callback: LoadCallback<K, B>
+    ) {
+        mSource.loadAfter(
+            params,
+            object : LoadCallback<K, A>() {
+                override fun onResult(data: List<A>, adjacentPageKey: K?) {
+                    callback.onResult(
+                        convert(mListFunction, data),
+                        adjacentPageKey
+                    )
+                }
+            })
     }
 
-    @Override
-    public void loadAfter(@NonNull LoadParams<K> params,
-            final @NonNull LoadCallback<K, B> callback) {
-        mSource.loadAfter(params, new LoadCallback<K, A>() {
-            @Override
-            public void onResult(@NonNull List<A> data, @Nullable K adjacentPageKey) {
-                callback.onResult(convert(mListFunction, data), adjacentPageKey);
-            }
-        });
-    }
 }

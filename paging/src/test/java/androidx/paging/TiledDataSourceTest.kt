@@ -28,7 +28,7 @@ import org.mockito.Mockito.verifyNoMoreInteractions
 
 @Suppress("DEPRECATION")
 @RunWith(JUnit4::class)
-class TiledDataSourceTest {
+internal class TiledDataSourceTest {
 
     fun TiledDataSource<String>.loadInitial(
             startPosition: Int, count: Int, pageSize: Int): List<String> {
