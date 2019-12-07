@@ -16,25 +16,36 @@
 
 package androidx.paging
 
-internal class AsyncListDataSource<T>(list: List<T>)
+import kotlinx.coroutines.channels.Channel
+
+class AsyncListDataSource<T>(list: List<T>)
     : CoroutinePositionalDataSource<T>() {
     private val workItems: MutableList<() -> Unit> = ArrayList()
     private val listDataSource = CoroutineListDataSource(list)
 
-    override fun loadInitial(params: LoadInitialParams, callback: LoadInitialCallback<T>) {
+    private val flushChannel = Channel<Boolean>()
+
+    override suspend fun loadInitial(params: LoadInitialParams) : InitialResult<T> {
+        val result = listDataSource.loadInitial(params)
         workItems.add {
-            listDataSource.loadInitial(params, callback)
+            result
         }
+        flushChannel.receive()
+        return result
     }
 
-    override fun loadRange(params: LoadRangeParams, callback: LoadRangeCallback<T>) {
+    override suspend fun loadRange(params: LoadRangeParams) : LoadRangeResult<T> {
+        val result = listDataSource.loadRange(params)
         workItems.add {
-            listDataSource.loadRange(params, callback)
+            result
         }
+        flushChannel.receive()
+        return result
     }
 
-    fun flush() {
-        workItems.map { it() }
+    suspend fun flush() {
+        //workItems.map { it() }
+        flushChannel.send(true)
         workItems.clear()
     }
 }

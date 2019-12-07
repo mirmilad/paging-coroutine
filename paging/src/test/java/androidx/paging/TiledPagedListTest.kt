@@ -16,12 +16,22 @@
 
 package androidx.paging
 
+import androidx.isEmpty
+import io.mockk.every
+import io.mockk.mockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.TestCoroutineDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runBlockingTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -32,8 +42,35 @@ import org.mockito.Mockito.verifyZeroInteractions
 
 @RunWith(JUnit4::class)
 class TiledPagedListTest {
+
     private val mMainThread = TestExecutor()
-    private val mBackgroundThread = TestExecutor()
+    //private val mBackgroundThread = TestExecutor()
+
+    private val mMainTestDispatcher = TestCoroutineDispatcher()
+    private val mDefaultTestDispatcher = TestCoroutineDispatcher()
+    private val mIOTestDispatcher = TestCoroutineDispatcher()
+
+    @Before
+    fun setup() {
+        // provide the scope explicitly, in this example using a constructor parameter
+        Dispatchers.setMain(mMainTestDispatcher)
+
+        mockkStatic(Dispatchers::class)
+        every {
+            Dispatchers.Default
+        } returns mDefaultTestDispatcher
+        every {
+            Dispatchers.IO
+        } returns mIOTestDispatcher
+    }
+
+    @After
+    fun cleanUp() {
+        Dispatchers.resetMain()
+        mMainTestDispatcher.cleanupTestCoroutines()
+        mDefaultTestDispatcher.cleanupTestCoroutines()
+        mIOTestDispatcher.cleanupTestCoroutines()
+    }
 
     private class Item(position: Int) {
         val name: String = "Item $position"
@@ -68,9 +105,9 @@ class TiledPagedListTest {
         listData: List<Item> = ITEMS,
         boundaryCallback: PagedList.BoundaryCallback<Item>? = null,
         maxSize: Int = PagedList.Config.MAX_SIZE_UNBOUNDED
-    ): TiledPagedList<Item> {
-        return TiledPagedList(
-                CoroutineListDataSource(listData), mMainThread, mBackgroundThread, boundaryCallback,
+    ): CoroutineTiledPagedList<Item> {
+        return CoroutineTiledPagedList(
+                CoroutineListDataSource(listData), mMainThread, boundaryCallback,
                 PagedList.Config.Builder()
                         .setPageSize(pageSize)
                         .setInitialLoadSizeHint(pageSize * initPageCount)
@@ -147,28 +184,30 @@ class TiledPagedListTest {
     @Test
     fun initialLoadAsync() {
         val dataSource = AsyncListDataSource(ITEMS)
-        val pagedList = TiledPagedList(
-                dataSource, mMainThread, mBackgroundThread, null,
+        val pagedList = CoroutineTiledPagedList(
+                dataSource, mMainThread, null,
                 PagedList.Config.Builder().setPageSize(10).build(), 0)
 
         assertTrue(pagedList.isEmpty())
         drain()
         assertTrue(pagedList.isEmpty())
-        dataSource.flush()
+        mDefaultTestDispatcher.runBlockingTest {
+            dataSource.flush()
+        }
         assertTrue(pagedList.isEmpty())
-        mBackgroundThread.executeAll()
+        executeBackground()         //mBackgroundThread.executeAll()
         assertTrue(pagedList.isEmpty())
 
         // Data source defers callbacks until flush, which posts result to main thread
-        mMainThread.executeAll()
+        executeMain()           //mMainThread.executeAll()
         assertFalse(pagedList.isEmpty())
     }
 
     @Test
     fun addWeakCallbackEmpty() {
         val dataSource = AsyncListDataSource(ITEMS)
-        val pagedList = TiledPagedList(
-                dataSource, mMainThread, mBackgroundThread, null,
+        val pagedList = CoroutineTiledPagedList(
+                dataSource, mMainThread,null,
                 PagedList.Config.Builder().setPageSize(10).build(), 0)
 
         // capture empty snapshot
@@ -177,7 +216,9 @@ class TiledPagedListTest {
         assertTrue(emptySnapshot.isEmpty())
 
         // data added in asynchronously
-        dataSource.flush()
+        mDefaultTestDispatcher.runBlockingTest {
+            dataSource.flush()
+        }
         drain()
         assertFalse(pagedList.isEmpty())
 
@@ -196,6 +237,7 @@ class TiledPagedListTest {
         verifyLoadedPages(pagedList, 0, 1)
         verifyZeroInteractions(callback)
 
+        pauseAllDispatchers()
         pagedList.loadAround(15)
 
         verifyLoadedPages(pagedList, 0, 1)
@@ -342,6 +384,7 @@ class TiledPagedListTest {
                 prefetchDistance = 1,
                 maxSize = 30)
         verifyLoadedPages(pagedList, 1, 2, 3)
+        pauseAllDispatchers()
 
         val callback = mock(PagedList.Callback::class.java)
         pagedList.addWeakCallback(null, callback)
@@ -349,12 +392,12 @@ class TiledPagedListTest {
         // start a load at the beginning...
         pagedList.loadAround(10)
 
-        mBackgroundThread.executeAll()
+        executeBackground()         //mBackgroundThread.executeAll()
 
         // but before page received, access near end of list
         pagedList.loadAround(39)
         verifyZeroInteractions(callback)
-        mMainThread.executeAll()
+        executeMain()           //mMainThread.executeAll()
         // and the load at the end is dropped without signaling callback
         verifyNoMoreInteractions(callback)
         verifyLoadedPages(pagedList, 1, 2, 3)
@@ -373,6 +416,7 @@ class TiledPagedListTest {
                 prefetchDistance = 1,
                 maxSize = 30)
         verifyLoadedPages(pagedList, 1, 2, 3)
+        pauseAllDispatchers()
 
         val callback = mock(PagedList.Callback::class.java)
         pagedList.addWeakCallback(null, callback)
@@ -380,12 +424,12 @@ class TiledPagedListTest {
         // start a load at the end...
         pagedList.loadAround(39)
 
-        mBackgroundThread.executeAll()
+        executeBackground()             //mBackgroundThread.executeAll()
 
         // but before page received, access near front of list
         pagedList.loadAround(10)
         verifyZeroInteractions(callback)
-        mMainThread.executeAll()
+        executeMain()           //mMainThread.executeAll()
         // and the load at the end is dropped without signaling callback
         verifyNoMoreInteractions(callback)
         verifyLoadedPages(pagedList, 1, 2, 3)
@@ -457,9 +501,8 @@ class TiledPagedListTest {
                 .setInitialLoadSizeHint(PAGE_SIZE)
                 .setEnablePlaceholders(false)
                 .build()
-        val pagedList = PagedList.Builder<Int, Item>(CoroutineListDataSource(ITEMS), config)
+        val pagedList = CoroutinePagedList.Builder(CoroutineListDataSource(ITEMS), config)
                 .setNotifyExecutor(mMainThread)
-                .setFetchExecutor(mBackgroundThread)
                 .setInitialKey(20)
                 .build()
 
@@ -575,6 +618,11 @@ class TiledPagedListTest {
                 prefetchDistance = 0,
                 boundaryCallback = boundaryCallback,
                 listData = listData)
+
+        //mMainTestDispatcher.advanceUntilIdle()
+        //mDefaultTestDispatcher.advanceUntilIdle()
+        drainDispatchers()
+
         assertNotNull(pagedList[pagedList.size - 1 - PAGE_SIZE])
         assertNull(pagedList.last()) // not completed loading
 
@@ -606,12 +654,49 @@ class TiledPagedListTest {
         validateCallbackForSize(3, 3 * PAGE_SIZE + 2)
     }
 
+    private fun executeMain() {
+        mMainTestDispatcher.advanceUntilIdle()
+        mMainThread.executeAll()
+
+        mMainTestDispatcher.pauseDispatcher()
+    }
+
+    private fun executeBackground() {
+        mDefaultTestDispatcher.advanceUntilIdle()
+        mIOTestDispatcher.advanceUntilIdle()
+        //mBackgroundThread.executeAll()
+
+        mDefaultTestDispatcher.pauseDispatcher()
+        mIOTestDispatcher.pauseDispatcher()
+    }
+
+    private fun drainDispatchers() {
+        do {
+            mDefaultTestDispatcher.advanceUntilIdle()
+            mIOTestDispatcher.advanceUntilIdle()
+            mMainTestDispatcher.advanceUntilIdle()
+        } while (!mDefaultTestDispatcher.isEmpty() &&
+            !mIOTestDispatcher.isEmpty() &&
+            !mMainTestDispatcher.isEmpty())
+    }
+
     private fun drain() {
+        drainDispatchers()
+
         var executed: Boolean
         do {
-            executed = mBackgroundThread.executeAll()
+            //executed = mBackgroundThread.executeAll()
+            executed = false
             executed = mMainThread.executeAll() || executed
         } while (executed)
+
+        pauseAllDispatchers()
+    }
+
+    private fun pauseAllDispatchers() {
+        mDefaultTestDispatcher.pauseDispatcher()
+        mIOTestDispatcher.pauseDispatcher()
+        mMainTestDispatcher.pauseDispatcher()
     }
 
     companion object {

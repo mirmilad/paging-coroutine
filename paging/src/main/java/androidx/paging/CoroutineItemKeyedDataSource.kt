@@ -16,8 +16,8 @@
 package androidx.paging
 
 import androidx.arch.core.util.Function
+import androidx.paging.PageResult.INIT
 import androidx.paging.PageResult.ResultType
-import java.util.concurrent.Executor
 
 /**
  * Incremental data loader for paging keyed content, where loaded content uses previously loaded
@@ -38,7 +38,7 @@ import java.util.concurrent.Executor
  * @param <Key> Type of data used to query Value types out of the DataSource.
  * @param <Value> Type of items being loaded by the DataSource.
 </Value></Key> */
-internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
+abstract class CoroutineItemKeyedDataSource<Key, Value> :
     CoroutineContiguousDataSource<Key, Value>() {
     /**
      * Holder object for inputs to [.loadInitial].
@@ -138,12 +138,13 @@ internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
          * as well as any items that can be loaded in front or behind of
          * `data`.
          */
-        abstract fun onResult(
+        internal abstract fun onResult(
             data: List<Value>,
             position: Int,
             totalCount: Int
-        )
+        ) : CoroutinePageResult<Value>
     }
+    data class InitialResult<Value>(val data : List<Value>, val position: Int? = null, val totalCount: Int? = null)
 
     /**
      * Callback for ItemKeyedDataSource [.loadBefore]
@@ -178,67 +179,61 @@ internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
          *
          * @param data List of items loaded from the ItemKeyedDataSource.
          */
-        abstract fun onResult(data: List<Value>)
+        internal abstract suspend fun onResult(data: List<Value>) : CoroutinePageResult<Value>
     }
+    data class LoadResult<Value>(val data: List<Value>)
 
     internal class LoadInitialCallbackImpl<Value>(
-        dataSource: CoroutineItemKeyedDataSource<*, *>, countingEnabled: Boolean,
-        receiver: PageResult.Receiver<Value>
+        private val mDataSource: CoroutineItemKeyedDataSource<*, *>,
+        private val mCountingEnabled: Boolean
     ) :
         LoadInitialCallback<Value>() {
-        val mCallbackHelper: LoadCallbackHelper<Value>
-        private val mCountingEnabled: Boolean
 
         override fun onResult(
             data: List<Value>,
             position: Int,
             totalCount: Int
-        ) {
-            if (!mCallbackHelper.dispatchInvalidResultIfInvalid()) {
-                LoadCallbackHelper.validateInitialLoadParams(data, position, totalCount)
-                val trailingUnloadedCount = totalCount - position - data.size
-                if (mCountingEnabled) {
-                    mCallbackHelper.dispatchResultToReceiver(
-                        PageResult(
-                            data, position, trailingUnloadedCount, 0
-                        )
+        ) : CoroutinePageResult<Value> {
+
+            if (mDataSource.isInvalid) {
+                return CoroutinePageResult(INIT, PageResult.getInvalidResult())
+            }
+
+            LoadCallbackHelper.validateInitialLoadParams(data, position, totalCount)
+            val trailingUnloadedCount = totalCount - position - data.size
+            return if (mCountingEnabled) {
+                CoroutinePageResult(
+                    INIT,
+                    PageResult(
+                        data, position, trailingUnloadedCount, 0
                     )
-                } else {
-                    mCallbackHelper.dispatchResultToReceiver(PageResult(data, position))
-                }
+                )
+            } else {
+                CoroutinePageResult(INIT, PageResult(data, position))
             }
         }
 
-        override fun onResult(data: List<Value>) {
-            if (!mCallbackHelper.dispatchInvalidResultIfInvalid()) {
-                mCallbackHelper.dispatchResultToReceiver(PageResult(data, 0, 0, 0))
+        override suspend fun onResult(data: List<Value>) : CoroutinePageResult<Value> {
+            if (mDataSource.isInvalid) {
+                return CoroutinePageResult(INIT, PageResult.getInvalidResult())
             }
-        }
 
-        init {
-            mCallbackHelper =
-                LoadCallbackHelper(dataSource, PageResult.INIT, null, receiver)
-            mCountingEnabled = countingEnabled
+            return CoroutinePageResult(INIT, PageResult(data, 0, 0, 0))
         }
     }
 
     internal class LoadCallbackImpl<Value>(
-        dataSource: CoroutineItemKeyedDataSource<*, *>, @ResultType type: Int,
-        mainThreadExecutor: Executor?,
-        receiver: PageResult.Receiver<Value>
+        private val mDataSource: CoroutineItemKeyedDataSource<*, *>,
+        @ResultType private val mType: Int
     ) :
         LoadCallback<Value>() {
-        val mCallbackHelper: LoadCallbackHelper<Value>
-        override fun onResult(data: List<Value>) {
-            if (!mCallbackHelper.dispatchInvalidResultIfInvalid()) {
-                mCallbackHelper.dispatchResultToReceiver(PageResult(data, 0, 0, 0))
-            }
-        }
 
-        init {
-            mCallbackHelper = LoadCallbackHelper(
-                dataSource, type, mainThreadExecutor, receiver
-            )
+        override suspend fun onResult(data: List<Value>) : CoroutinePageResult<Value> {
+            if (mDataSource.isInvalid) {
+                return CoroutinePageResult(mType, PageResult.getInvalidResult())
+            }
+
+            return CoroutinePageResult(mType, PageResult(data, 0, 0, 0))
         }
     }
 
@@ -246,50 +241,50 @@ internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
         return item?.let { getKey(it) }
     }
 
-    override fun dispatchLoadInitial(
-        key: Key?, initialLoadSize: Int, pageSize: Int,
-        enablePlaceholders: Boolean, mainThreadExecutor: Executor,
-        receiver: PageResult.Receiver<Value>
-    ) {
-        val callback =
-            LoadInitialCallbackImpl(
+    override suspend fun dispatchLoadInitial(
+        key: Key?,
+        initialLoadSize: Int,
+        pageSize: Int,
+        enablePlaceholders: Boolean
+    ): CoroutinePageResult<Value> {
+        val callback = LoadInitialCallbackImpl<Value>(
                 this,
-                enablePlaceholders,
-                receiver
-            )
-        loadInitial(
-            LoadInitialParams(
+                enablePlaceholders)
+
+        return loadInitial(LoadInitialParams(
                 key,
                 initialLoadSize,
                 enablePlaceholders
-            ), callback
-        )
-        // If initialLoad's callback is not called within the body, we force any following calls
-// to post to the UI thread. This constructor may be run on a background thread, but
-// after constructor, mutation must happen on UI thread.
-        callback.mCallbackHelper.setPostExecutor(mainThreadExecutor)
+            )).run {
+                if(position != null && totalCount != null)
+                    callback.onResult(data, position, totalCount)
+                else
+                    callback.onResult(data)
+            }
     }
 
-    override fun dispatchLoadAfter(
-        currentEndIndex: Int, currentEndItem: Value,
-        pageSize: Int, mainThreadExecutor: Executor,
-        receiver: PageResult.Receiver<Value>
-    ) {
-        loadAfter(
-            LoadParams(getKey(currentEndItem), pageSize),
-            LoadCallbackImpl(this, PageResult.APPEND, mainThreadExecutor, receiver)
-        )
+    override suspend fun dispatchLoadAfter(
+        currentEndIndex: Int,
+        currentEndItem: Value,
+        pageSize: Int
+    ): CoroutinePageResult<Value> {
+        val callback = LoadCallbackImpl<Value>(this, PageResult.APPEND)
+        return loadAfter(
+            LoadParams(getKey(currentEndItem), pageSize)).run {
+            callback.onResult(data)
+        }
     }
 
-    override fun dispatchLoadBefore(
-        currentBeginIndex: Int, currentBeginItem: Value,
-        pageSize: Int, mainThreadExecutor: Executor,
-        receiver: PageResult.Receiver<Value>
-    ) {
-        loadBefore(
-            LoadParams(getKey(currentBeginItem), pageSize),
-            LoadCallbackImpl(this, PageResult.PREPEND, mainThreadExecutor, receiver)
-        )
+    override suspend fun dispatchLoadBefore(
+        currentBeginIndex: Int,
+        currentBeginItem: Value,
+        pageSize: Int
+    ): CoroutinePageResult<Value> {
+        val callback = LoadCallbackImpl<Value>(this, PageResult.PREPEND)
+        return loadBefore(
+            LoadParams(getKey(currentBeginItem), pageSize)).run {
+            callback.onResult(data)
+        }
     }
 
     /**
@@ -314,10 +309,9 @@ internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
      * @param params Parameters for initial load, including initial key and requested size.
      * @param callback Callback that receives initial load data.
      */
-    abstract fun loadInitial(
-        params: LoadInitialParams<Key>,
-        callback: LoadInitialCallback<Value>
-    )
+    abstract suspend fun loadInitial(
+        params: LoadInitialParams<Key>
+    ) : InitialResult<Value>
 
     /**
      * Load list data after the key specified in [key].
@@ -338,10 +332,9 @@ internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
      * @param params Parameters for the load, including the key to load after, and requested size.
      * @param callback Callback that receives loaded data.
      */
-    abstract fun loadAfter(
-        params: LoadParams<Key>,
-        callback: LoadCallback<Value>
-    )
+    abstract suspend fun loadAfter(
+        params: LoadParams<Key>
+    ) : LoadResult<Value>
 
     /**
      * Load list data before the key specified in [key].
@@ -367,10 +360,9 @@ internal abstract class CoroutineItemKeyedDataSource<Key, Value> :
      * @param params Parameters for the load, including the key to load before, and requested size.
      * @param callback Callback that receives loaded data.
      */
-    abstract fun loadBefore(
-        params: LoadParams<Key>,
-        callback: LoadCallback<Value>
-    )
+    abstract suspend fun loadBefore(
+        params: LoadParams<Key>
+    ) : LoadResult<Value>
 
     /**
      * Return a key associated with the given item.

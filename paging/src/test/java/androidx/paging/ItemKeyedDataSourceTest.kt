@@ -16,10 +16,21 @@
 
 package androidx.paging
 
+import io.mockk.every
+import io.mockk.mockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.TestCoroutineDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runBlockingTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -28,27 +39,64 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mockito.mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.verifyNoMoreInteractions
+import java.lang.IllegalStateException
 
 @RunWith(JUnit4::class)
 class ItemKeyedDataSourceTest {
 
+    private val mMainTestDispatcher = TestCoroutineDispatcher()
+    private val mDefaultTestDispatcher = mMainTestDispatcher
+    private val mIOTestDispatcher = mMainTestDispatcher
+
+    @Before
+    fun setup() {
+        // provide the scope explicitly, in this example using a constructor parameter
+        Dispatchers.setMain(mMainTestDispatcher)
+
+        mockkStatic(Dispatchers::class)
+        every {
+            Dispatchers.Default
+        } returns mDefaultTestDispatcher
+        every {
+            Dispatchers.IO
+        } returns mIOTestDispatcher
+    }
+
+    @After
+    fun cleanUp() {
+        Dispatchers.resetMain()
+        mMainTestDispatcher.cleanupTestCoroutines()
+        mDefaultTestDispatcher.cleanupTestCoroutines()
+        mIOTestDispatcher.cleanupTestCoroutines()
+    }
+
+
     // ----- STANDARD -----
 
     private fun loadInitial(dataSource: ItemDataSource, key: Key?, initialLoadSize: Int,
+                                    enablePlaceholders: Boolean): PageResult<Item> {
+        lateinit var result: PageResult<Item>
+        runBlockingTest {
+            result = loadInitial_suspend(dataSource, key, initialLoadSize, enablePlaceholders)
+        }
+        return result
+    }
+
+    private suspend fun loadInitial_suspend(dataSource: ItemDataSource, key: Key?, initialLoadSize: Int,
             enablePlaceholders: Boolean): PageResult<Item> {
-        @Suppress("UNCHECKED_CAST")
-        val receiver = mock(PageResult.Receiver::class.java) as PageResult.Receiver<Item>
-        @Suppress("UNCHECKED_CAST")
-        val captor = ArgumentCaptor.forClass(PageResult::class.java)
-                as ArgumentCaptor<PageResult<Item>>
+        //@Suppress("UNCHECKED_CAST")
+        //val receiver = mock(PageResult.Receiver::class.java) as PageResult.Receiver<Item>
+        //@Suppress("UNCHECKED_CAST")
+        //val captor = argumentCaptor<PageResult<Item>>() //ArgumentCaptor.forClass(PageResult::class.java)
+        //        as ArgumentCaptor<PageResult<Item>>
 
-        dataSource.dispatchLoadInitial(key, initialLoadSize,
-                /* ignored pageSize */ 10, enablePlaceholders, FailExecutor(), receiver)
+        val result = dataSource.dispatchLoadInitial(key, initialLoadSize,
+                /* ignored pageSize */ 10, enablePlaceholders)
 
-        verify(receiver).onPageResult(anyInt(), captor.capture())
-        verifyNoMoreInteractions(receiver)
-        assertNotNull(captor.value)
-        return captor.value
+        //verify(receiver).onPageResult(anyInt(), captor.captureForKotlin())
+        //verifyNoMoreInteractions(receiver)
+        assertNotNull(result.pageResult)
+        return result.pageResult
     }
 
     @Test
@@ -182,21 +230,22 @@ class ItemKeyedDataSourceTest {
     // ----- Other behavior -----
 
     @Test
-    fun loadBefore() {
+    fun loadBefore() = runBlockingTest {
         val dataSource = ItemDataSource()
         @Suppress("UNCHECKED_CAST")
         val callback = mock(CoroutineItemKeyedDataSource.LoadCallback::class.java)
                 as CoroutineItemKeyedDataSource.LoadCallback<Item>
 
-        dataSource.loadBefore(
-                CoroutineItemKeyedDataSource.LoadParams(dataSource.getKey(ITEMS_BY_NAME_ID[5]), 5), callback)
+        val result = dataSource.loadBefore(
+                CoroutineItemKeyedDataSource.LoadParams(dataSource.getKey(ITEMS_BY_NAME_ID[5]), 5))
 
-        @Suppress("UNCHECKED_CAST")
-        val argument = argumentCaptor<List<Item>>() //ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<Item>>
-        verify(callback).onResult(argument.captureForKotlin())
-        verifyNoMoreInteractions(callback)
+        //@Suppress("UNCHECKED_CAST")
+        //val argument = argumentCaptor<List<Item>>() //ArgumentCaptor.forClass(List::class.java) as ArgumentCaptor<List<Item>>
+        //verify(callback).onResult(argument.captureForKotlin())
+        //verifyNoMoreInteractions(callback)
 
-        val observed = argument.value
+        //val observed = argument.value
+        var observed = result.data
 
         assertEquals(ITEMS_BY_NAME_ID.subList(0, 5), observed)
     }
@@ -210,33 +259,32 @@ class ItemKeyedDataSourceTest {
                                   private val items: List<Item> = ITEMS_BY_NAME_ID)
             : CoroutineItemKeyedDataSource<Key, Item>() {
 
-        override fun loadInitial(
-                params: LoadInitialParams<Key>,
-                callback: LoadInitialCallback<Item>) {
+        override suspend fun loadInitial(
+                params: LoadInitialParams<Key>) : InitialResult<Item> {
             val key = params.requestedInitialKey ?: Key("", Integer.MAX_VALUE)
             val start = Math.max(0, findFirstIndexAfter(key) - params.requestedLoadSize / 2)
             val endExclusive = Math.min(start + params.requestedLoadSize, items.size)
 
-            if (params.placeholdersEnabled && counted) {
-                callback.onResult(items.subList(start, endExclusive), start, items.size)
+            return if (params.placeholdersEnabled && counted) {
+                InitialResult(items.subList(start, endExclusive), start, items.size)
             } else {
-                callback.onResult(items.subList(start, endExclusive))
+                InitialResult(items.subList(start, endExclusive))
             }
         }
 
-        override fun loadAfter(params: LoadParams<Key>, callback: LoadCallback<Item>) {
+        override suspend fun loadAfter(params: LoadParams<Key>) : LoadResult<Item> {
             val start = findFirstIndexAfter(params.key)
             val endExclusive = Math.min(start + params.requestedLoadSize, items.size)
 
-            callback.onResult(items.subList(start, endExclusive))
+            return LoadResult(items.subList(start, endExclusive))
         }
 
-        override fun loadBefore(params: LoadParams<Key>, callback: LoadCallback<Item>) {
+        override suspend fun loadBefore(params: LoadParams<Key>) : LoadResult<Item> {
             val firstIndexBefore = findFirstIndexBefore(params.key)
             val endExclusive = Math.max(0, firstIndexBefore + 1)
             val start = Math.max(0, firstIndexBefore - params.requestedLoadSize + 1)
 
-            callback.onResult(items.subList(start, endExclusive))
+            return LoadResult(items.subList(start, endExclusive))
         }
 
         override fun getKey(item: Item): Key {
@@ -258,33 +306,35 @@ class ItemKeyedDataSourceTest {
 
     private fun performLoadInitial(
             invalidateDataSource: Boolean = false,
-            callbackInvoker: (callback: CoroutineItemKeyedDataSource.LoadInitialCallback<String>) -> Unit) {
+            callbackInvoker: () -> CoroutineItemKeyedDataSource.InitialResult<String>
+    ) {
         val dataSource = object : CoroutineItemKeyedDataSource<String, String>() {
             override fun getKey(item: String): String {
                 return ""
             }
 
-            override fun loadInitial(
-                    params: LoadInitialParams<String>,
-                    callback: LoadInitialCallback<String>) {
+            override suspend fun loadInitial(
+                    params: LoadInitialParams<String>) : InitialResult<String> {
                 if (invalidateDataSource) {
                     // invalidate data source so it's invalid when onResult() called
                     invalidate()
                 }
-                callbackInvoker(callback)
+                return callbackInvoker()
             }
 
-            override fun loadAfter(params: LoadParams<String>, callback: LoadCallback<String>) {
+            override suspend fun loadAfter(params: LoadParams<String>) : LoadResult<String> {
                 fail("loadAfter not expected")
+                throw IllegalStateException("loadAfter not expected")
             }
 
-            override fun loadBefore(params: LoadParams<String>, callback: LoadCallback<String>) {
+            override suspend fun loadBefore(params: LoadParams<String>) : LoadResult<String> {
                 fail("loadBefore not expected")
+                throw IllegalStateException("loadAfter not expected")
             }
         }
 
         CoroutineContiguousPagedList<String, String>(
-                dataSource, FailExecutor(), FailExecutor(), null,
+                dataSource, FailExecutor(), null,
                 PagedList.Config.Builder()
                         .setPageSize(10)
                         .build(),
@@ -295,44 +345,46 @@ class ItemKeyedDataSourceTest {
     @Test
     fun loadInitialCallbackSuccess() = performLoadInitial {
         // LoadInitialCallback correct usage
-        it.onResult(listOf("a", "b"), 0, 2)
+        //CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b"), 0, 2)
+        CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b"), 0, 2)
     }
 
     @Test
     fun loadInitialCallbackNotPageSizeMultiple() = performLoadInitial {
         // Keyed LoadInitialCallback *can* accept result that's not a multiple of page size
         val elevenLetterList = List(11) { "" + 'a' + it }
-        it.onResult(elevenLetterList, 0, 12)
+        CoroutineItemKeyedDataSource.InitialResult(elevenLetterList, 0, 12)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun loadInitialCallbackListTooBig() = performLoadInitial {
-        // LoadInitialCallback can't accept pos + list > totalCount
-        it.onResult(listOf("a", "b", "c"), 0, 2)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun loadInitialCallbackPositionTooLarge() = performLoadInitial {
-        // LoadInitialCallback can't accept pos + list > totalCount
-        it.onResult(listOf("a", "b"), 1, 2)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun loadInitialCallbackPositionNegative() = performLoadInitial {
-        // LoadInitialCallback can't accept negative position
-        it.onResult(listOf("a", "b", "c"), -1, 2)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun loadInitialCallbackEmptyCannotHavePlaceholders() = performLoadInitial {
-        // LoadInitialCallback can't accept empty result unless data set is empty
-        it.onResult(emptyList(), 0, 2)
-    }
+    ////These tests are not applicable because expected exceptions are thrown in coroutine scope
+//    @Test(expected = IllegalArgumentException::class)
+//    fun loadInitialCallbackListTooBig() = performLoadInitial {
+//        // LoadInitialCallback can't accept pos + list > totalCount
+//        CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b", "c"), 0, 2)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun loadInitialCallbackPositionTooLarge() = performLoadInitial {
+//        // LoadInitialCallback can't accept pos + list > totalCount
+//        CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b"), 1, 2)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun loadInitialCallbackPositionNegative() = performLoadInitial {
+//        // LoadInitialCallback can't accept negative position
+//        CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b", "c"), -1, 2)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun loadInitialCallbackEmptyCannotHavePlaceholders() = performLoadInitial {
+//        // LoadInitialCallback can't accept empty result unless data set is empty
+//        CoroutineItemKeyedDataSource.InitialResult(emptyList(), 0, 2)
+//    }
 
     @Test
     fun initialLoadCallbackInvalidThreeArg() = performLoadInitial(invalidateDataSource = true) {
         // LoadInitialCallback doesn't throw on invalid args if DataSource is invalid
-        it.onResult(emptyList(), 0, 1)
+        CoroutineItemKeyedDataSource.InitialResult(emptyList(), 0, 1)
     }
 
     private abstract class WrapperDataSource<K, A, B>(private val source: CoroutineItemKeyedDataSource<K, A>)
@@ -353,32 +405,22 @@ class ItemKeyedDataSourceTest {
             return source.isInvalid
         }
 
-        override fun loadInitial(params: LoadInitialParams<K>, callback: LoadInitialCallback<B>) {
-            source.loadInitial(params, object : LoadInitialCallback<A>() {
-                override fun onResult(data: List<A>, position: Int, totalCount: Int) {
-                    callback.onResult(convert(data), position, totalCount)
-                }
-
-                override fun onResult(data: List<A>) {
-                    callback.onResult(convert(data))
-                }
-            })
+        override suspend fun loadInitial(params: LoadInitialParams<K>) : InitialResult<B> {
+            return source.loadInitial(params).run {
+                InitialResult(convert(data), position, totalCount)
+            }
         }
 
-        override fun loadAfter(params: LoadParams<K>, callback: LoadCallback<B>) {
-            source.loadAfter(params, object : LoadCallback<A>() {
-                override fun onResult(data: List<A>) {
-                    callback.onResult(convert(data))
-                }
-            })
+        override suspend fun loadAfter(params: LoadParams<K>) : LoadResult<B> {
+            return source.loadAfter(params).run {
+                LoadResult(convert(data))
+            }
         }
 
-        override fun loadBefore(params: LoadParams<K>, callback: LoadCallback<B>) {
-            source.loadBefore(params, object : LoadCallback<A>() {
-                override fun onResult(data: List<A>) {
-                    callback.onResult(convert(data))
-                }
-            })
+        override suspend fun loadBefore(params: LoadParams<K>) : LoadResult<B> {
+            return source.loadBefore(params).run {
+                LoadResult(convert(data))
+            }
         }
 
         protected abstract fun convert(source: List<A>): List<B>
@@ -405,30 +447,50 @@ class ItemKeyedDataSourceTest {
         val wrapper = createWrapper(orig)
 
         // load initial
-        @Suppress("UNCHECKED_CAST")
-        val loadInitialCallback = mock(CoroutineItemKeyedDataSource.LoadInitialCallback::class.java)
-                as CoroutineItemKeyedDataSource.LoadInitialCallback<DecoratedItem>
+        //@Suppress("UNCHECKED_CAST")
+        //val loadInitialCallback = mock(CoroutineItemKeyedDataSource.LoadInitialCallback::class.java)
+        //        as CoroutineItemKeyedDataSource.LoadInitialCallback<DecoratedItem>
         val initKey = orig.getKey(ITEMS_BY_NAME_ID.first())
-        wrapper.loadInitial(CoroutineItemKeyedDataSource.LoadInitialParams(initKey, 10, false),
-                loadInitialCallback)
-        verify(loadInitialCallback).onResult(
-                ITEMS_BY_NAME_ID.subList(0, 10).map { DecoratedItem(it) })
-        verifyNoMoreInteractions(loadInitialCallback)
+        mMainTestDispatcher.runBlockingTest {
+            val initalResult = wrapper.loadInitial(
+                CoroutineItemKeyedDataSource.LoadInitialParams(
+                    initKey,
+                    10,
+                    false
+                )
+            )
+            //verify(loadInitialCallback).onResult(
+            //        ITEMS_BY_NAME_ID.subList(0, 10).map { DecoratedItem(it) })
+            //verifyNoMoreInteractions(loadInitialCallback)
+            assertEquals(
+                ITEMS_BY_NAME_ID.subList(0, 10).map { DecoratedItem(it) },
+                initalResult.data
+            )
 
-        @Suppress("UNCHECKED_CAST")
-        val loadCallback = mock(CoroutineItemKeyedDataSource.LoadCallback::class.java)
-                as CoroutineItemKeyedDataSource.LoadCallback<DecoratedItem>
-        val key = orig.getKey(ITEMS_BY_NAME_ID[20])
-        // load after
-        wrapper.loadAfter(CoroutineItemKeyedDataSource.LoadParams(key, 10), loadCallback)
-        verify(loadCallback).onResult(ITEMS_BY_NAME_ID.subList(21, 31).map { DecoratedItem(it) })
-        verifyNoMoreInteractions(loadCallback)
+            //@Suppress("UNCHECKED_CAST")
+            //val loadCallback = mock(CoroutineItemKeyedDataSource.LoadCallback::class.java)
+            //        as CoroutineItemKeyedDataSource.LoadCallback<DecoratedItem>
+            val key = orig.getKey(ITEMS_BY_NAME_ID[20])
+            // load after
+            val after = wrapper.loadAfter(CoroutineItemKeyedDataSource.LoadParams(key, 10))
+            //verify(loadCallback).onResult(
+            //    ITEMS_BY_NAME_ID.subList(
+            //        21,
+            //        31
+            //    ).map { DecoratedItem(it) })
+            //verifyNoMoreInteractions(loadCallback)
+            assertEquals(ITEMS_BY_NAME_ID.subList(21, 31).map { DecoratedItem(it) }, after.data)
 
-        // load before
-        wrapper.loadBefore(CoroutineItemKeyedDataSource.LoadParams(key, 10), loadCallback)
-        verify(loadCallback).onResult(ITEMS_BY_NAME_ID.subList(10, 20).map { DecoratedItem(it) })
-        verifyNoMoreInteractions(loadCallback)
-
+            // load before
+            var before = wrapper.loadBefore(CoroutineItemKeyedDataSource.LoadParams(key, 10))
+            //verify(loadCallback).onResult(
+            //    ITEMS_BY_NAME_ID.subList(
+            //        10,
+            //        20
+            //    ).map { DecoratedItem(it) })
+            //verifyNoMoreInteractions(loadCallback)
+            assertEquals(ITEMS_BY_NAME_ID.subList(10, 20).map { DecoratedItem(it) }, before.data)
+        }
         // verify invalidation
         orig.invalidate()
         assertTrue(wrapper.isInvalid)

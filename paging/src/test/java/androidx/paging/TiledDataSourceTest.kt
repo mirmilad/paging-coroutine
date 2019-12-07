@@ -16,7 +16,16 @@
 
 package androidx.paging
 
+import io.mockk.every
+import io.mockk.mockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.TestCoroutineDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runBlockingTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -30,22 +39,18 @@ import org.mockito.Mockito.verifyNoMoreInteractions
 @RunWith(JUnit4::class)
 internal class TiledDataSourceTest {
 
-    fun CoroutineTiledDataSource<String>.loadInitial(
-            startPosition: Int, count: Int, pageSize: Int): List<String> {
-        @Suppress("UNCHECKED_CAST")
-        val receiver = mock(PageResult.Receiver::class.java) as PageResult.Receiver<String>
+    private val mMainTestDispatcher = TestCoroutineDispatcher()
 
-        this.dispatchLoadInitial(true, startPosition, count, pageSize, FailExecutor(), receiver)
+    @Before
+    fun setup() {
+        // provide the scope explicitly, in this example using a constructor parameter
+        Dispatchers.setMain(mMainTestDispatcher)
+    }
 
-        @Suppress("UNCHECKED_CAST")
-        val argument = ArgumentCaptor.forClass(PageResult::class.java)
-                as ArgumentCaptor<PageResult<String>>
-        verify(receiver).onPageResult(eq(PageResult.INIT), argument.capture())
-        verifyNoMoreInteractions(receiver)
-
-        val observed = argument.value
-
-        return observed.page
+    @After
+    fun cleanUp() {
+        Dispatchers.resetMain()
+        mMainTestDispatcher.cleanupTestCoroutines()
     }
 
     @Test
@@ -61,6 +66,27 @@ internal class TiledDataSourceTest {
         }
 
         assertEquals(emptyList<String>(), EmptyDataSource().loadInitial(0, 1, 5))
+    }
+
+    fun CoroutineTiledDataSource<String>.loadInitial(
+        startPosition: Int, count: Int, pageSize: Int): List<String> {
+
+        lateinit var observed: PageResult<String>
+        //@Suppress("UNCHECKED_CAST")
+        //val receiver = mock(PageResult.Receiver::class.java) as PageResult.Receiver<String>
+        mMainTestDispatcher.runBlockingTest {
+            val initialResult = dispatchLoadInitial(true, startPosition, count, pageSize)
+
+            //@Suppress("UNCHECKED_CAST")
+            //val argument = ArgumentCaptor.forClass(PageResult::class.java)
+            //        as ArgumentCaptor<PageResult<String>>
+            //verify(receiver).onPageResult(eq(PageResult.INIT), argument.capture())
+            //verifyNoMoreInteractions(receiver)
+            assertEquals(PageResult.INIT, initialResult.type)
+            observed = initialResult.pageResult
+        }
+
+        return observed.page
     }
 
     @Test

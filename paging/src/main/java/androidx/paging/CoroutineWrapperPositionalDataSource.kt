@@ -17,7 +17,7 @@ package androidx.paging
 
 import androidx.arch.core.util.Function
 
-internal class CoroutineWrapperPositionalDataSource<A, B>(
+class CoroutineWrapperPositionalDataSource<A, B>(
     private val mSource: CoroutinePositionalDataSource<A>,
     /* synthetic access */val mListFunction: Function<List<A>, List<B>>
 ) : CoroutinePositionalDataSource<B>() {
@@ -37,43 +37,20 @@ internal class CoroutineWrapperPositionalDataSource<A, B>(
         return mSource.isInvalid
     }
 
-    override fun loadInitial(
-        params: LoadInitialParams,
-        callback: LoadInitialCallback<B>
-    ) {
-        mSource.loadInitial(
-            params,
-            object : LoadInitialCallback<A>() {
-                override fun onResult(
-                    data: List<A>,
-                    position: Int,
-                    totalCount: Int
-                ) {
-                    callback.onResult(
-                        convert(mListFunction, data),
-                        position,
-                        totalCount
-                    )
-                }
-
-                override fun onResult(data: List<A>, position: Int) {
-                    callback.onResult(
-                        convert(mListFunction, data),
-                        position
-                    )
-                }
-            })
+    override suspend fun loadInitial(
+        params: LoadInitialParams
+    ) : InitialResult<B> {
+        return mSource.loadInitial(params).run {
+            InitialResult(convert(mListFunction, data), position, totalCount)
+        }
     }
 
-    override fun loadRange(
-        params: LoadRangeParams,
-        callback: LoadRangeCallback<B>
-    ) {
-        mSource.loadRange(params, object : LoadRangeCallback<A>() {
-            override fun onResult(data: List<A>) {
-                callback.onResult(convert(mListFunction, data))
-            }
-        })
+    override suspend fun loadRange(
+        params: LoadRangeParams
+    ) : LoadRangeResult<B> {
+        return mSource.loadRange(params).run {
+            LoadRangeResult(convert(mListFunction, data))
+        }
     }
 
 }

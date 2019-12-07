@@ -16,9 +16,18 @@
 
 package androidx.paging
 
+import io.mockk.every
+import io.mockk.mockkStatic
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.test.TestCoroutineDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runBlockingTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -28,6 +37,33 @@ import org.mockito.Mockito.verifyNoMoreInteractions
 
 @RunWith(JUnit4::class)
 class PositionalDataSourceTest {
+    private val mMainTestDispatcher = TestCoroutineDispatcher()
+    private val mDefaultTestDispatcher = mMainTestDispatcher
+    private val mIOTestDispatcher = mMainTestDispatcher
+
+    @Before
+    fun setup() {
+        // provide the scope explicitly, in this example using a constructor parameter
+        Dispatchers.setMain(mMainTestDispatcher)
+
+        mockkStatic(Dispatchers::class)
+        every {
+            Dispatchers.Default
+        } returns mDefaultTestDispatcher
+        every {
+            Dispatchers.IO
+        } returns mIOTestDispatcher
+    }
+
+    @After
+    fun cleanUp() {
+        Dispatchers.resetMain()
+        mMainTestDispatcher.cleanupTestCoroutines()
+        mDefaultTestDispatcher.cleanupTestCoroutines()
+        mIOTestDispatcher.cleanupTestCoroutines()
+    }
+
+
     private fun computeInitialLoadPos(
             requestedStartPosition: Int,
             requestedLoadSize: Int,
@@ -94,7 +130,7 @@ class PositionalDataSourceTest {
         val dataSource: CoroutinePositionalDataSource<Int> = CoroutineListDataSource((0..99).toList())
         val testExecutor = TestExecutor()
         val pagedList = CoroutineContiguousPagedList(dataSource.wrapAsContiguousWithoutPlaceholders(),
-                testExecutor, testExecutor, null, config, 15,
+                testExecutor, null, config, 15,
                 CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
 
         assertEquals((10..19).toList(), pagedList)
@@ -115,20 +151,21 @@ class PositionalDataSourceTest {
     private fun performLoadInitial(
             enablePlaceholders: Boolean = true,
             invalidateDataSource: Boolean = false,
-            callbackInvoker: (callback: CoroutinePositionalDataSource.LoadInitialCallback<String>) -> Unit) {
+            callbackInvoker: () -> CoroutinePositionalDataSource.InitialResult<String>
+    ) {
         val dataSource = object : CoroutinePositionalDataSource<String>() {
-            override fun loadInitial(
-                    params: LoadInitialParams,
-                    callback: LoadInitialCallback<String>) {
+            override suspend fun loadInitial(
+                    params: LoadInitialParams) : InitialResult<String> {
                 if (invalidateDataSource) {
                     // invalidate data source so it's invalid when onResult() called
                     invalidate()
                 }
-                callbackInvoker(callback)
+                return callbackInvoker()
             }
 
-            override fun loadRange(params: LoadRangeParams, callback: LoadRangeCallback<String>) {
+            override suspend fun loadRange(params: LoadRangeParams) : LoadRangeResult<String> {
                 fail("loadRange not expected")
+                throw IllegalStateException()
             }
         }
 
@@ -137,10 +174,10 @@ class PositionalDataSourceTest {
                 .setEnablePlaceholders(enablePlaceholders)
                 .build()
         if (enablePlaceholders) {
-            TiledPagedList(dataSource, FailExecutor(), FailExecutor(), null, config, 0)
+            CoroutineTiledPagedList(dataSource, FailExecutor(), null, config, 0)
         } else {
             CoroutineContiguousPagedList(dataSource.wrapAsContiguousWithoutPlaceholders(),
-                    FailExecutor(), FailExecutor(), null, config, null,
+                    FailExecutor(), null, config, null,
                     CoroutineContiguousPagedList.LAST_LOAD_UNSPECIFIED)
         }
     }
@@ -148,75 +185,76 @@ class PositionalDataSourceTest {
     @Test
     fun initialLoadCallbackSuccess() = performLoadInitial {
         // LoadInitialCallback correct usage
-        it.onResult(listOf("a", "b"), 0, 2)
+        CoroutinePositionalDataSource.InitialResult(listOf("a", "b"), 0, 2)
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackNotPageSizeMultiple() = performLoadInitial {
-        // Positional LoadInitialCallback can't accept result that's not a multiple of page size
-        val elevenLetterList = List(11) { "" + 'a' + it }
-        it.onResult(elevenLetterList, 0, 12)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackListTooBig() = performLoadInitial {
-        // LoadInitialCallback can't accept pos + list > totalCount
-        it.onResult(listOf("a", "b", "c"), 0, 2)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackPositionTooLarge() = performLoadInitial {
-        // LoadInitialCallback can't accept pos + list > totalCount
-        it.onResult(listOf("a", "b"), 1, 2)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackPositionNegative() = performLoadInitial {
-        // LoadInitialCallback can't accept negative position
-        it.onResult(listOf("a", "b", "c"), -1, 2)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackEmptyCannotHavePlaceholders() = performLoadInitial {
-        // LoadInitialCallback can't accept empty result unless data set is empty
-        it.onResult(emptyList(), 0, 2)
-    }
-
-    @Test(expected = IllegalStateException::class)
-    fun initialLoadCallbackRequireTotalCount() = performLoadInitial(enablePlaceholders = true) {
-        // LoadInitialCallback requires 3 args when placeholders enabled
-        it.onResult(listOf("a", "b"), 0)
-    }
-
-    @Test
-    fun initialLoadCallbackSuccessTwoArg() = performLoadInitial(enablePlaceholders = false) {
-        // LoadInitialCallback correct 2 arg usage
-        it.onResult(listOf("a", "b"), 0)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackPosNegativeTwoArg() = performLoadInitial(enablePlaceholders = false) {
-        // LoadInitialCallback can't accept negative position
-        it.onResult(listOf("a", "b"), -1)
-    }
-
-    @Test(expected = IllegalArgumentException::class)
-    fun initialLoadCallbackEmptyWithOffset() = performLoadInitial(enablePlaceholders = false) {
-        // LoadInitialCallback can't accept empty result unless pos is 0
-        it.onResult(emptyList(), 1)
-    }
-
-    @Test
-    fun initialLoadCallbackInvalidTwoArg() = performLoadInitial(invalidateDataSource = true) {
-        // LoadInitialCallback doesn't throw on invalid args if DataSource is invalid
-        it.onResult(emptyList(), 1)
-    }
-
-    @Test
-    fun initialLoadCallbackInvalidThreeArg() = performLoadInitial(invalidateDataSource = true) {
-        // LoadInitialCallback doesn't throw on invalid args if DataSource is invalid
-        it.onResult(emptyList(), 0, 1)
-    }
+    ////These tests are not applicable because expected exceptions are thrown in coroutine scope
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackNotPageSizeMultiple() = performLoadInitial {
+//        // Positional LoadInitialCallback can't accept result that's not a multiple of page size
+//        val elevenLetterList = List(11) { "" + 'a' + it }
+//        CoroutinePositionalDataSource.InitialResult(elevenLetterList, 0, 12)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackListTooBig() = performLoadInitial {
+//        // LoadInitialCallback can't accept pos + list > totalCount
+//        CoroutinePositionalDataSource.InitialResult(listOf("a", "b", "c"), 0, 2)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackPositionTooLarge() = performLoadInitial {
+//        // LoadInitialCallback can't accept pos + list > totalCount
+//        CoroutinePositionalDataSource.InitialResult(listOf("a", "b"), 1, 2)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackPositionNegative() = performLoadInitial {
+//        // LoadInitialCallback can't accept negative position
+//        CoroutinePositionalDataSource.InitialResult(listOf("a", "b", "c"), -1, 2)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackEmptyCannotHavePlaceholders() = performLoadInitial {
+//        // LoadInitialCallback can't accept empty result unless data set is empty
+//        CoroutinePositionalDataSource.InitialResult(emptyList(), 0, 2)
+//    }
+//
+//    @Test(expected = IllegalStateException::class)
+//    fun initialLoadCallbackRequireTotalCount() = performLoadInitial(enablePlaceholders = true) {
+//        // LoadInitialCallback requires 3 args when placeholders enabled
+//        CoroutinePositionalDataSource.InitialResult(listOf("a", "b"), 0)
+//    }
+//
+//    @Test
+//    fun initialLoadCallbackSuccessTwoArg() = performLoadInitial(enablePlaceholders = false) {
+//        // LoadInitialCallback correct 2 arg usage
+//        CoroutinePositionalDataSource.InitialResult(listOf("a", "b"), 0)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackPosNegativeTwoArg() = performLoadInitial(enablePlaceholders = false) {
+//        // LoadInitialCallback can't accept negative position
+//        CoroutinePositionalDataSource.InitialResult(listOf("a", "b"), -1)
+//    }
+//
+//    @Test(expected = IllegalArgumentException::class)
+//    fun initialLoadCallbackEmptyWithOffset() = performLoadInitial(enablePlaceholders = false) {
+//        // LoadInitialCallback can't accept empty result unless pos is 0
+//        CoroutinePositionalDataSource.InitialResult(emptyList(), 1)
+//    }
+//
+//    @Test
+//    fun initialLoadCallbackInvalidTwoArg() = performLoadInitial(invalidateDataSource = true) {
+//        // LoadInitialCallback doesn't throw on invalid args if DataSource is invalid
+//        CoroutinePositionalDataSource.InitialResult(emptyList(), 1)
+//    }
+//
+//    @Test
+//    fun initialLoadCallbackInvalidThreeArg() = performLoadInitial(invalidateDataSource = true) {
+//        // LoadInitialCallback doesn't throw on invalid args if DataSource is invalid
+//        CoroutinePositionalDataSource.InitialResult(emptyList(), 0, 1)
+//    }
 
     private abstract class WrapperDataSource<in A, B>(private val source: CoroutinePositionalDataSource<A>)
             : CoroutinePositionalDataSource<B>() {
@@ -236,24 +274,12 @@ class PositionalDataSourceTest {
             return source.isInvalid
         }
 
-        override fun loadInitial(params: LoadInitialParams, callback: LoadInitialCallback<B>) {
-            source.loadInitial(params, object : LoadInitialCallback<A>() {
-                override fun onResult(data: List<A>, position: Int, totalCount: Int) {
-                    callback.onResult(convert(data), position, totalCount)
-                }
-
-                override fun onResult(data: List<A>, position: Int) {
-                    callback.onResult(convert(data), position)
-                }
-            })
+        override suspend fun loadInitial(params: LoadInitialParams) : InitialResult<B> {
+            return source.loadInitial(params).run { InitialResult(convert(data), position, totalCount) }
         }
 
-        override fun loadRange(params: LoadRangeParams, callback: LoadRangeCallback<B>) {
-            source.loadRange(params, object : LoadRangeCallback<A>() {
-                override fun onResult(data: List<A>) {
-                    callback.onResult(convert(data))
-                }
-            })
+        override suspend fun loadRange(params: LoadRangeParams) : LoadRangeResult<B> {
+            return source.loadRange(params).run { LoadRangeResult(convert(data)) }
         }
 
         protected abstract fun convert(source: List<A>): List<B>
@@ -272,24 +298,28 @@ class PositionalDataSourceTest {
         val wrapper = createWrapper(orig)
 
         // load initial
-        @Suppress("UNCHECKED_CAST")
-        val loadInitialCallback = mock(CoroutinePositionalDataSource.LoadInitialCallback::class.java)
-                as CoroutinePositionalDataSource.LoadInitialCallback<String>
+        //@Suppress("UNCHECKED_CAST")
+        //val loadInitialCallback = mock(CoroutinePositionalDataSource.LoadInitialCallback::class.java)
+        //        as CoroutinePositionalDataSource.LoadInitialCallback<String>
+        mMainTestDispatcher.runBlockingTest {
+            val initial =
+                wrapper.loadInitial(CoroutinePositionalDataSource.LoadInitialParams(0, 2, 1, true))
+            //verify(loadInitialCallback).onResult(listOf("0", "5"), 0, 5)
+            //verifyNoMoreInteractions(loadInitialCallback)
+            assertEquals(CoroutinePositionalDataSource.InitialResult(listOf("0", "5"), 0, 5), initial)
 
-        wrapper.loadInitial(CoroutinePositionalDataSource.LoadInitialParams(0, 2, 1, true),
-                loadInitialCallback)
-        verify(loadInitialCallback).onResult(listOf("0", "5"), 0, 5)
-        verifyNoMoreInteractions(loadInitialCallback)
+            // load range
+            //@Suppress("UNCHECKED_CAST")
+            //val loadRangeCallback =
+            //    mock(CoroutinePositionalDataSource.LoadRangeCallback::class.java)
+            //            as CoroutinePositionalDataSource.LoadRangeCallback<String>
 
-        // load range
-        @Suppress("UNCHECKED_CAST")
-        val loadRangeCallback = mock(CoroutinePositionalDataSource.LoadRangeCallback::class.java)
-                as CoroutinePositionalDataSource.LoadRangeCallback<String>
-
-        wrapper.loadRange(CoroutinePositionalDataSource.LoadRangeParams(2, 3), loadRangeCallback)
-        verify(loadRangeCallback).onResult(listOf("4", "8", "12"))
-        verifyNoMoreInteractions(loadRangeCallback)
-
+            val range = wrapper.loadRange(
+                CoroutinePositionalDataSource.LoadRangeParams(2, 3))
+            //verify(loadRangeCallback).onResult(listOf("4", "8", "12"))
+            //verifyNoMoreInteractions(loadRangeCallback)
+            assertEquals(CoroutinePositionalDataSource.LoadRangeResult(listOf("4", "8", "12")), range)
+        }
         // check invalidation behavior
         val invalCallback = mock(DataSource.InvalidatedCallback::class.java)
         wrapper.addInvalidatedCallback(invalCallback)

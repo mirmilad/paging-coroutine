@@ -1,62 +1,42 @@
-/*
- * Copyright 2018 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package androidx.paging
 
-package androidx.paging;
+import kotlinx.coroutines.CoroutineScope
 
-import java.util.concurrent.Executor
-
-
-internal abstract class CoroutineContiguousDataSource<Key, Value> : DataSource<Key, Value>() {
+abstract class CoroutineContiguousDataSource<Key, Value> : CoroutineDataSource<Key, Value>() {
 
     override fun isContiguous(): Boolean {
-        return true;
+        return true
     }
 
-    abstract fun dispatchLoadInitial(
+    internal abstract suspend fun dispatchLoadInitial(
         key: Key?,
         initialLoadSize: Int,
         pageSize: Int,
-        enablePlaceholders: Boolean,
-        mainThreadExecutor: Executor,
-        receiver: PageResult.Receiver<Value>
-    )
+        enablePlaceholders: Boolean
+    ) : CoroutinePageResult<Value>
 
-    abstract fun dispatchLoadAfter(
+    internal abstract suspend fun dispatchLoadAfter(
         currentEndIndex: Int,
         currentEndItem: Value,
-        pageSize: Int,
-        mainThreadExecutor: Executor,
-        receiver: PageResult.Receiver<Value>
-    )
+        pageSize: Int
+    ) : CoroutinePageResult<Value>
 
-    abstract fun dispatchLoadBefore(
+    internal abstract suspend fun dispatchLoadBefore(
         currentBeginIndex: Int,
         currentBeginItem: Value,
-        pageSize: Int,
-        mainThreadExecutor: Executor,
-        receiver: PageResult.Receiver<Value>
-    );
+        pageSize: Int
+    ) : CoroutinePageResult<Value>
 
     /**
      * Get the key from either the position, or item, or null if position/item invalid.
-     * <p>
+     *
+     *
      * Position may not match passed item's position - if trying to query the key from a position
      * that isn't yet loaded, a fallback item (last loaded item accessed) will be passed.
      */
     internal abstract fun getKey(position: Int, item: Value?): Key?
 
-    open fun supportsPageDropping() = true
+    internal open fun supportsPageDropping(): Boolean {
+        return true
+    }
 }

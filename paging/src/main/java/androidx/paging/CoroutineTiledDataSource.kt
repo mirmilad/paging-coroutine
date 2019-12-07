@@ -17,6 +17,9 @@ package androidx.paging
 
 import androidx.annotation.RestrictTo
 import androidx.annotation.WorkerThread
+import java.lang.Exception
+import java.lang.IllegalStateException
+import java.lang.NullPointerException
 
 // NOTE: Room 1.0 depends on this class, so it should not be removed until
 // we can require a version of Room that uses PositionalDataSource directly
@@ -38,37 +41,46 @@ internal abstract class CoroutineTiledDataSource<T> : CoroutinePositionalDataSou
     @WorkerThread
     abstract fun loadRange(startPosition: Int, count: Int): List<T>?
 
-    override fun loadInitial(
-        params: LoadInitialParams,
-        callback: LoadInitialCallback<T>
-    ) {
+    override suspend fun loadInitial(
+        params: LoadInitialParams
+    ) : InitialResult<T> {
         val totalCount = countItems()
         if (totalCount == 0) {
-            callback.onResult(emptyList(), 0, 0)
-            return
+            return InitialResult(emptyList(), 0, 0)
         }
         // bound the size requested, based on known count
         val firstLoadPosition = computeInitialLoadPosition(params, totalCount)
         val firstLoadSize = computeInitialLoadSize(params, firstLoadPosition, totalCount)
         // convert from legacy behavior
-        val list = loadRange(firstLoadPosition, firstLoadSize)
-        if (list != null && list.size == firstLoadSize) {
-            callback.onResult(list, firstLoadPosition, totalCount)
-        } else { // null list, or size doesn't match request
+        try {
+            val list = loadRange(firstLoadPosition, firstLoadSize)
+            if (list != null && list.size == firstLoadSize) {
+                return InitialResult(list, firstLoadPosition, totalCount)
+            } else { // null list, or size doesn't match request
 // The size check is a WAR for Room 1.0, subsequent versions do the check in Room
+                //invalidate()
+                throw IllegalStateException()
+            }
+        } catch (e: Exception) {
             invalidate()
+            throw e
         }
     }
 
-    override fun loadRange(
-        params: LoadRangeParams,
-        callback: LoadRangeCallback<T>
-    ) {
-        val list = loadRange(params.startPosition, params.loadSize)
-        if (list != null) {
-            callback.onResult(list)
-        } else {
+    override suspend fun loadRange(
+        params: LoadRangeParams
+    ) : LoadRangeResult<T> {
+        try {
+            val list = loadRange(params.startPosition, params.loadSize)
+            if (list != null) {
+                return LoadRangeResult(list)
+            } else {
+                //invalidate()
+                throw IllegalStateException("list is empty")
+            }
+        } catch (e: Exception) {
             invalidate()
+            throw e
         }
     }
 }

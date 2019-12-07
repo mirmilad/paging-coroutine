@@ -18,7 +18,7 @@ package androidx.paging
 import androidx.arch.core.util.Function
 import java.util.*
 
-internal class CoroutineWrapperItemKeyedDataSource<K, A, B>(
+class CoroutineWrapperItemKeyedDataSource<K, A, B>(
     private val mSource: CoroutineItemKeyedDataSource<K, A>,
     /* synthetic access */val mListFunction: Function<List<A>, List<B>>
 ) : CoroutineItemKeyedDataSource<K, B>() {
@@ -52,47 +52,22 @@ internal class CoroutineWrapperItemKeyedDataSource<K, A, B>(
         return dest
     }
 
-    override fun loadInitial(
-        params: LoadInitialParams<K>,
-        callback: LoadInitialCallback<B>
-    ) {
-        mSource.loadInitial(
-            params,
-            object : LoadInitialCallback<A>() {
-                override fun onResult(
-                    data: List<A>,
-                    position: Int,
-                    totalCount: Int
-                ) {
-                    callback.onResult(convertWithStashedKeys(data), position, totalCount)
-                }
-
-                override fun onResult(data: List<A>) {
-                    callback.onResult(convertWithStashedKeys(data))
-                }
-            })
+    override suspend fun loadInitial(params: LoadInitialParams<K>): InitialResult<B> {
+        return mSource.loadInitial(params).run {
+            InitialResult(convertWithStashedKeys(data), position, totalCount)
+        }
     }
 
-    override fun loadAfter(
-        params: LoadParams<K>,
-        callback: LoadCallback<B>
-    ) {
-        mSource.loadAfter(params, object : LoadCallback<A>() {
-            override fun onResult(data: List<A>) {
-                callback.onResult(convertWithStashedKeys(data))
-            }
-        })
+    override suspend fun loadAfter(params: LoadParams<K>): LoadResult<B> {
+        return mSource.loadAfter(params).run {
+            LoadResult(convertWithStashedKeys(data))
+        }
     }
 
-    override fun loadBefore(
-        params: LoadParams<K>,
-        callback: LoadCallback<B>
-    ) {
-        mSource.loadBefore(params, object : LoadCallback<A>() {
-            override fun onResult(data: List<A>) {
-                callback.onResult(convertWithStashedKeys(data))
-            }
-        })
+    override suspend fun loadBefore(params: LoadParams<K>): LoadResult<B> {
+        return mSource.loadBefore(params).run {
+            LoadResult(convertWithStashedKeys(data))
+        }
     }
 
     override fun getKey(item: B): K {
