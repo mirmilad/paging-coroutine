@@ -46,7 +46,7 @@ internal abstract class CoroutineTiledDataSource<T> : CoroutinePositionalDataSou
     ) : InitialResult<T> {
         val totalCount = countItems()
         if (totalCount == 0) {
-            return InitialResult(emptyList(), 0, 0)
+            return InitialResult.Success(emptyList(), 0, 0)
         }
         // bound the size requested, based on known count
         val firstLoadPosition = computeInitialLoadPosition(params, totalCount)
@@ -55,7 +55,7 @@ internal abstract class CoroutineTiledDataSource<T> : CoroutinePositionalDataSou
         try {
             val list = loadRange(firstLoadPosition, firstLoadSize)
             if (list != null && list.size == firstLoadSize) {
-                return InitialResult(list, firstLoadPosition, totalCount)
+                return InitialResult.Success(list, firstLoadPosition, totalCount)
             } else { // null list, or size doesn't match request
 // The size check is a WAR for Room 1.0, subsequent versions do the check in Room
                 //invalidate()
@@ -73,7 +73,7 @@ internal abstract class CoroutineTiledDataSource<T> : CoroutinePositionalDataSou
         try {
             val list = loadRange(params.startPosition, params.loadSize)
             if (list != null) {
-                return LoadRangeResult(list)
+                return LoadRangeResult.Success(list)
             } else {
                 //invalidate()
                 throw IllegalStateException("list is empty")

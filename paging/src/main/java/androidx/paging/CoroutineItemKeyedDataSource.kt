@@ -144,7 +144,13 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
             totalCount: Int
         ) : CoroutinePageResult<Value>
     }
-    data class InitialResult<Value>(val data : List<Value>, val position: Int? = null, val totalCount: Int? = null)
+    sealed class InitialResult<out Value> {
+        data class Success<out Value>(val data : List<Value>, val position: Int? = null, val totalCount: Int? = null) : InitialResult<Value>()
+
+        data class Error(val throwable: Throwable) : InitialResult<Nothing>()
+
+        object None : InitialResult<Nothing>()
+    }
 
     /**
      * Callback for ItemKeyedDataSource [.loadBefore]
@@ -181,7 +187,13 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
          */
         internal abstract suspend fun onResult(data: List<Value>) : CoroutinePageResult<Value>
     }
-    data class LoadResult<Value>(val data: List<Value>)
+    sealed class LoadResult<out Value> {
+        data class Success<out Value>(val data: List<Value>) : LoadResult<Value>()
+
+        data class Error(val throwable: Throwable) : LoadResult<Nothing>()
+
+        object None : LoadResult<Nothing>()
+    }
 
     internal class LoadInitialCallbackImpl<Value>(
         private val mDataSource: CoroutineItemKeyedDataSource<*, *>,
@@ -196,29 +208,29 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
         ) : CoroutinePageResult<Value> {
 
             if (mDataSource.isInvalid) {
-                return CoroutinePageResult(INIT, PageResult.getInvalidResult())
+                return CoroutinePageResult.Success(INIT, PageResult.getInvalidResult())
             }
 
             LoadCallbackHelper.validateInitialLoadParams(data, position, totalCount)
             val trailingUnloadedCount = totalCount - position - data.size
             return if (mCountingEnabled) {
-                CoroutinePageResult(
+                CoroutinePageResult.Success(
                     INIT,
                     PageResult(
                         data, position, trailingUnloadedCount, 0
                     )
                 )
             } else {
-                CoroutinePageResult(INIT, PageResult(data, position))
+                CoroutinePageResult.Success(INIT, PageResult(data, position))
             }
         }
 
         override suspend fun onResult(data: List<Value>) : CoroutinePageResult<Value> {
             if (mDataSource.isInvalid) {
-                return CoroutinePageResult(INIT, PageResult.getInvalidResult())
+                return CoroutinePageResult.Success(INIT, PageResult.getInvalidResult())
             }
 
-            return CoroutinePageResult(INIT, PageResult(data, 0, 0, 0))
+            return CoroutinePageResult.Success(INIT, PageResult(data, 0, 0, 0))
         }
     }
 
@@ -230,10 +242,10 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
 
         override suspend fun onResult(data: List<Value>) : CoroutinePageResult<Value> {
             if (mDataSource.isInvalid) {
-                return CoroutinePageResult(mType, PageResult.getInvalidResult())
+                return CoroutinePageResult.Success(mType, PageResult.getInvalidResult())
             }
 
-            return CoroutinePageResult(mType, PageResult(data, 0, 0, 0))
+            return CoroutinePageResult.Success(mType, PageResult(data, 0, 0, 0))
         }
     }
 
@@ -251,16 +263,25 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
                 this,
                 enablePlaceholders)
 
-        return loadInitial(LoadInitialParams(
+        return loadInitial(
+            LoadInitialParams(
                 key,
                 initialLoadSize,
                 enablePlaceholders
-            )).run {
-                if(position != null && totalCount != null)
-                    callback.onResult(data, position, totalCount)
-                else
-                    callback.onResult(data)
+            )
+        ).run {
+            when (this) {
+                InitialResult.None -> CoroutinePageResult.None
+                is InitialResult.Error -> CoroutinePageResult.Error(throwable)
+                is InitialResult.Success -> {
+                    if (position != null && totalCount != null)
+                        callback.onResult(data, position, totalCount)
+                    else
+                        callback.onResult(data)
+
+                }
             }
+        }
     }
 
     override suspend fun dispatchLoadAfter(
@@ -270,8 +291,13 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
     ): CoroutinePageResult<Value> {
         val callback = LoadCallbackImpl<Value>(this, PageResult.APPEND)
         return loadAfter(
-            LoadParams(getKey(currentEndItem), pageSize)).run {
-            callback.onResult(data)
+            LoadParams(getKey(currentEndItem), pageSize)
+        ).run {
+            when (this) {
+                LoadResult.None -> CoroutinePageResult.None
+                is LoadResult.Error -> CoroutinePageResult.Error(throwable)
+                is LoadResult.Success -> callback.onResult(data)
+            }
         }
     }
 
@@ -282,8 +308,13 @@ abstract class CoroutineItemKeyedDataSource<Key, Value> :
     ): CoroutinePageResult<Value> {
         val callback = LoadCallbackImpl<Value>(this, PageResult.PREPEND)
         return loadBefore(
-            LoadParams(getKey(currentBeginItem), pageSize)).run {
-            callback.onResult(data)
+            LoadParams(getKey(currentBeginItem), pageSize)
+        ).run {
+            when (this) {
+                LoadResult.None -> CoroutinePageResult.None
+                is LoadResult.Error -> CoroutinePageResult.Error(throwable)
+                is LoadResult.Success -> callback.onResult(data)
+            }
         }
     }
 

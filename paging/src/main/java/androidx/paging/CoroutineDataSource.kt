@@ -4,19 +4,26 @@ import androidx.lifecycle.LiveData
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 
 abstract class CoroutineDataSource<K, V> : DataSource<K, V>() {
 
-    internal data class CoroutinePageResult<T>(val type: Int, val pageResult: PageResult<T>) {}
+    internal sealed class CoroutinePageResult<out T> {
+        data class Success<T>(val type: Int, val pageResult: PageResult<T>) : CoroutinePageResult<T>() {}
 
-    class No
+        data class Error(val throwable: Throwable) : CoroutinePageResult<Nothing>()
+
+        object None : CoroutinePageResult<Nothing>()
+    }
 
     private val completableJob = Job()
     val coroutineScope = CoroutineScope(Dispatchers.Default + completableJob)
 
     override fun invalidate() {
+        cancelCoroutines()
         super.invalidate()
+    }
+
+    fun cancelCoroutines() {
         completableJob.cancel()
     }
 

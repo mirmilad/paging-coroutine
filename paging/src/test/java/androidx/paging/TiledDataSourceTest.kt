@@ -25,6 +25,7 @@ import kotlinx.coroutines.test.runBlockingTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -82,7 +83,8 @@ internal class TiledDataSourceTest {
             //        as ArgumentCaptor<PageResult<String>>
             //verify(receiver).onPageResult(eq(PageResult.INIT), argument.capture())
             //verifyNoMoreInteractions(receiver)
-            assertEquals(PageResult.INIT, initialResult.type)
+            assertTrue(initialResult is CoroutineDataSource.CoroutinePageResult.Success)
+            assertEquals(PageResult.INIT, (initialResult as CoroutineDataSource.CoroutinePageResult.Success).type)
             observed = initialResult.pageResult
         }
 

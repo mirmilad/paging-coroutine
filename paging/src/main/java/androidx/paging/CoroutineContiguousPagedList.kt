@@ -1,7 +1,6 @@
 package androidx.paging
 
 import android.annotation.SuppressLint
-import android.renderscript.Sampler
 import androidx.annotation.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -161,7 +160,10 @@ internal class CoroutineContiguousPagedList<K, V>(
                    mConfig.pageSize,
                    mConfig.enablePlaceholders
                ).run {
-                   onPageResult(type, pageResult)
+                   when(this) {
+                       is CoroutineDataSource.CoroutinePageResult.Success<V> -> onPageResult(type, pageResult)
+                   }
+
                }
             }
         }
@@ -278,7 +280,9 @@ internal class CoroutineContiguousPagedList<K, V>(
                 mDataSource.dispatchLoadBefore(
                         position, item, mConfig.pageSize
                 ).run {
-                    onPageResult(type, pageResult)
+                    when(this) {
+                        is CoroutineDataSource.CoroutinePageResult.Success -> onPageResult(type, pageResult)
+                    }
                 }
             }
         }
@@ -319,7 +323,9 @@ internal class CoroutineContiguousPagedList<K, V>(
                 mDataSource.dispatchLoadAfter(
                     position, item, mConfig.pageSize
                 ).run {
-                    onPageResult(type, pageResult)
+                    when(this) {
+                        is CoroutineDataSource.CoroutinePageResult.Success -> onPageResult(type, pageResult)
+                    }
                 }
             }
         }

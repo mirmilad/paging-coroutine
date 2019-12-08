@@ -1,7 +1,5 @@
 package androidx.paging
 
-import kotlinx.coroutines.CoroutineScope
-
 abstract class CoroutineContiguousDataSource<Key, Value> : CoroutineDataSource<Key, Value>() {
 
     override fun isContiguous(): Boolean {

@@ -24,7 +24,6 @@ import kotlinx.coroutines.test.*
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -89,13 +88,13 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
             val trailingUnloadedCount = listData.size - position - data.size
 
             if (enablePlaceholders && mCounted) {
-                return CoroutinePageResult(
+                return CoroutinePageResult.Success(
                     PageResult.INIT,
                     PageResult(data, position, trailingUnloadedCount, 0)
                 )
             } else {
                 // still must pass offset, even if not counted
-                return CoroutinePageResult(
+                return CoroutinePageResult.Success(
                     PageResult.INIT,
                     PageResult(data, position)
                 )
@@ -110,7 +109,7 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
             val startIndex = currentEndIndex + 1
             val data = getClampedRange(startIndex, startIndex + pageSize)
 
-            return CoroutinePageResult(PageResult.APPEND, PageResult(data, 0, 0, 0))
+            return CoroutinePageResult.Success(PageResult.APPEND, PageResult(data, 0, 0, 0))
         }
 
         override suspend fun dispatchLoadBefore(
@@ -121,7 +120,7 @@ class ContiguousPagedListTest(private val mCounted: Boolean) {
             val startIndex = currentBeginIndex - 1
             val data = getClampedRange(startIndex - pageSize + 1, startIndex + 1)
 
-            return CoroutinePageResult(PageResult.PREPEND, PageResult(data, 0, 0, 0))
+            return CoroutinePageResult.Success(PageResult.PREPEND, PageResult(data, 0, 0, 0))
         }
 
         override fun getKey(position: Int, item: Item?): Int {

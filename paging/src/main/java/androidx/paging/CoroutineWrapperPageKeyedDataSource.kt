@@ -26,11 +26,17 @@ internal class CoroutineWrapperPageKeyedDataSource<K, A, B>(
     override suspend fun loadInitial(params: LoadInitialParams<K>): InitialResult<K, B> {
         val result = mSource.loadInitial(params)
         return result.run {
-            val convert = DataSource.convert(mListFunction, data)
-            if(position == 0 && totalCount == 0)
-                InitialResult<K, B>(convert, previousPageKey, nextPageKey)
-            else
-                InitialResult<K, B>(convert, position, totalCount, previousPageKey, nextPageKey)
+            return when(this) {
+                InitialResult.None -> this as InitialResult<K, B>
+                is InitialResult.Error -> this
+                is InitialResult.Success -> {
+                    val convert = DataSource.convert(mListFunction, data)
+                    if (position == 0 && totalCount == 0)
+                        InitialResult.Success(convert, previousPageKey, nextPageKey)
+                    else
+                        InitialResult.Success(convert, position, totalCount, previousPageKey, nextPageKey)
+                }
+            }
         }
     }
 
@@ -38,17 +44,28 @@ internal class CoroutineWrapperPageKeyedDataSource<K, A, B>(
     override suspend fun loadBefore(params: CoroutinePageKeyedDataSource.LoadParams<K>): LoadResult<K, B> {
         var result = mSource.loadBefore(params)
         return result.run {
-            LoadResult(DataSource.convert(mListFunction, data), adjacentPageKey)
+            return when(this) {
+                LoadResult.None -> LoadResult.None
+                is LoadResult.Error -> this
+                is LoadResult.Success -> LoadResult.Success(
+                    DataSource.convert(mListFunction, data),
+                    adjacentPageKey
+                )
+            }
         }
     }
 
     override suspend fun loadAfter(params: CoroutinePageKeyedDataSource.LoadParams<K>) : LoadResult<K, B> {
         var result = mSource.loadAfter(params)
         return result.run {
-            return LoadResult(
-                DataSource.convert(mListFunction, data),
-                adjacentPageKey
-            )
+            return when(this) {
+                LoadResult.None -> LoadResult.None
+                is LoadResult.Error -> this
+                is LoadResult.Success -> LoadResult.Success(
+                    DataSource.convert(mListFunction, data),
+                    adjacentPageKey
+                )
+            }
         }
     }
 }

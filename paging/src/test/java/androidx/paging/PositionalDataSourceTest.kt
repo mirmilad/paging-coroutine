@@ -185,7 +185,7 @@ class PositionalDataSourceTest {
     @Test
     fun initialLoadCallbackSuccess() = performLoadInitial {
         // LoadInitialCallback correct usage
-        CoroutinePositionalDataSource.InitialResult(listOf("a", "b"), 0, 2)
+        CoroutinePositionalDataSource.InitialResult.Success(listOf("a", "b"), 0, 2)
     }
 
     ////These tests are not applicable because expected exceptions are thrown in coroutine scope
@@ -275,11 +275,27 @@ class PositionalDataSourceTest {
         }
 
         override suspend fun loadInitial(params: LoadInitialParams) : InitialResult<B> {
-            return source.loadInitial(params).run { InitialResult(convert(data), position, totalCount) }
+            return source.loadInitial(params).run {
+                when(this) {
+                    InitialResult.None -> InitialResult.None
+                    is InitialResult.Error -> this
+                    is InitialResult.Success -> InitialResult.Success(
+                        convert(data),
+                        position,
+                        totalCount
+                    )
+                }
+            }
         }
 
         override suspend fun loadRange(params: LoadRangeParams) : LoadRangeResult<B> {
-            return source.loadRange(params).run { LoadRangeResult(convert(data)) }
+            return source.loadRange(params).run {
+                when(this) {
+                    LoadRangeResult.None -> LoadRangeResult.None
+                    is LoadRangeResult.Error -> this
+                    is LoadRangeResult.Success -> LoadRangeResult.Success(convert(data))
+                }
+            }
         }
 
         protected abstract fun convert(source: List<A>): List<B>
@@ -306,7 +322,7 @@ class PositionalDataSourceTest {
                 wrapper.loadInitial(CoroutinePositionalDataSource.LoadInitialParams(0, 2, 1, true))
             //verify(loadInitialCallback).onResult(listOf("0", "5"), 0, 5)
             //verifyNoMoreInteractions(loadInitialCallback)
-            assertEquals(CoroutinePositionalDataSource.InitialResult(listOf("0", "5"), 0, 5), initial)
+            assertEquals(CoroutinePositionalDataSource.InitialResult.Success(listOf("0", "5"), 0, 5), initial)
 
             // load range
             //@Suppress("UNCHECKED_CAST")
@@ -318,7 +334,7 @@ class PositionalDataSourceTest {
                 CoroutinePositionalDataSource.LoadRangeParams(2, 3))
             //verify(loadRangeCallback).onResult(listOf("4", "8", "12"))
             //verifyNoMoreInteractions(loadRangeCallback)
-            assertEquals(CoroutinePositionalDataSource.LoadRangeResult(listOf("4", "8", "12")), range)
+            assertEquals(CoroutinePositionalDataSource.LoadRangeResult.Success(listOf("4", "8", "12")), range)
         }
         // check invalidation behavior
         val invalCallback = mock(DataSource.InvalidatedCallback::class.java)

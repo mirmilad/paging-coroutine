@@ -78,17 +78,17 @@ class PageKeyedDataSourceTest {
 
         override suspend fun loadInitial(params: LoadInitialParams<String>): InitialResult<String, Item> {
             val page = getPage(INIT_KEY)
-            return InitialResult(page.data, page.prev, page.next)
+            return InitialResult.Success(page.data, page.prev, page.next)
         }
 
         override suspend fun loadBefore(params: LoadParams<String>): LoadResult<String, Item> {
             val page = getPage(params.key)
-            return LoadResult(page.data, page.prev)
+            return LoadResult.Success(page.data, page.prev)
         }
 
         override suspend fun loadAfter(params: LoadParams<String>): LoadResult<String, Item> {
             val page = getPage(params.key)
-            return LoadResult(page.data, page.next)
+            return LoadResult.Success(page.data, page.next)
         }
 
         private fun getPage(key: String): Page = data[key]!!
@@ -329,20 +329,37 @@ class PageKeyedDataSourceTest {
 
         override suspend fun loadInitial(params: LoadInitialParams<K>): InitialResult<K, B> {
             source.loadInitial(params).run {
-                return InitialResult(convert(data), position, totalCount, previousPageKey, nextPageKey)
+                return when (this) {
+                    InitialResult.None -> InitialResult.None
+                    is InitialResult.Error -> this
+                    is InitialResult.Success -> InitialResult.Success(
+                        convert(data),
+                        position,
+                        totalCount,
+                        previousPageKey,
+                        nextPageKey
+                    )
+                }
             }
-
         }
 
         override suspend fun loadAfter(params: LoadParams<K>): LoadResult<K, B> {
             source.loadAfter(params).run {
-                return LoadResult(convert(data), adjacentPageKey)
+                return when (this) {
+                    LoadResult.None -> LoadResult.None
+                    is LoadResult.Error -> this
+                    is LoadResult.Success -> LoadResult.Success(convert(data), adjacentPageKey)
+                }
             }
         }
 
         override suspend fun loadBefore(params: LoadParams<K>): LoadResult<K, B> {
             source.loadBefore(params).run {
-                return LoadResult(convert(data), adjacentPageKey)
+                return when (this) {
+                    LoadResult.None -> LoadResult.None
+                    is LoadResult.Error -> this
+                    is LoadResult.Success -> LoadResult.Success(convert(data), adjacentPageKey)
+                }
             }
         }
 
@@ -366,18 +383,18 @@ class PageKeyedDataSourceTest {
         // load initial
         val initialResult = wrapper.loadInitial(CoroutinePageKeyedDataSource.LoadInitialParams<String>(4, true))
         val expectedInitial = PAGE_MAP.get(INIT_KEY)!!
-        val expectedInitialResult = CoroutinePageKeyedDataSource.InitialResult(expectedInitial.data.map { it.toString() }, expectedInitial.prev, expectedInitial.next)
+        val expectedInitialResult = CoroutinePageKeyedDataSource.InitialResult.Success(expectedInitial.data.map { it.toString() }, expectedInitial.prev, expectedInitial.next)
         assertEquals(expectedInitialResult, initialResult)
 
         // load after
         val afterResult = wrapper.loadAfter(CoroutinePageKeyedDataSource.LoadParams(expectedInitial.next!!, 4))
         val expectedAfter = PAGE_MAP.get(expectedInitial.next)!!
-        val expectedAfterResult = CoroutinePageKeyedDataSource.LoadResult(expectedAfter.data.map { it.toString() }, expectedAfter.next)
+        val expectedAfterResult = CoroutinePageKeyedDataSource.LoadResult.Success(expectedAfter.data.map { it.toString() }, expectedAfter.next)
         assertEquals(expectedAfterResult, afterResult)
 
         // load before
         val beforeResult = wrapper.loadBefore(CoroutinePageKeyedDataSource.LoadParams(expectedAfter.prev!!, 4))
-        val expectedBeforeResult = CoroutinePageKeyedDataSource.LoadResult(expectedInitial.data.map { it.toString() }, expectedInitial.prev)
+        val expectedBeforeResult = CoroutinePageKeyedDataSource.LoadResult.Success(expectedInitial.data.map { it.toString() }, expectedInitial.prev)
         assertEquals(expectedBeforeResult, beforeResult)
 
         // verify invalidation

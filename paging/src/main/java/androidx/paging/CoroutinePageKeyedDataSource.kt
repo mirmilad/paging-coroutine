@@ -138,13 +138,25 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
      * as well as any items that can be loaded in front or behind of
      * `data`.
      */
-    data class InitialResult<Key, Value>(val data: List<Value>,
-                             val position: Int,
-                             val totalCount: Int,
-                             val previousPageKey: Key?,
-                             val nextPageKey: Key?) {
+    sealed class InitialResult<out Key, out Value> {
+        data class Success<Key, Value>(val data: List<Value>,
+                                       val position: Int,
+                                       val totalCount: Int,
+                                       val previousPageKey: Key?,
+                                       val nextPageKey: Key?) : InitialResult<Key, Value>() {
 
-        constructor(data: List<Value>, previousPageKey: Key?, nextPageKey: Key?) : this(data, 0, 0, previousPageKey, nextPageKey)
+            constructor(data: List<Value>, previousPageKey: Key?, nextPageKey: Key?) : this(
+                data,
+                0,
+                0,
+                previousPageKey,
+                nextPageKey
+            )
+        }
+
+        data class Error(val throwable: Throwable) : InitialResult<Nothing, Nothing>() {}
+
+        object None : InitialResult<Nothing, Nothing>()
     }
 
 
@@ -157,14 +169,20 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
      * @param <Key> Type of data used to query pages.
      * @param <Value> Type of items being loaded.
     </Value></Key> */
-    data class LoadResult<Key, Value>(val data: List<Value>, val adjacentPageKey: Key?)
+    sealed class LoadResult<out Key, out Value> {
+        data class Success<Key, Value>(val data: List<Value>, val adjacentPageKey: Key?) : LoadResult<Key, Value>()
+
+        data class Error(val throwable: Throwable) : LoadResult<Nothing, Nothing>() {}
+
+        object None : LoadResult<Nothing, Nothing>()
+    }
 
     internal class InitialResultHandler<Key, Value>(
         private val mDataSource: CoroutinePageKeyedDataSource<Key, Value>,
         private val mCountingEnabled: Boolean
     ) {
 
-        fun getPageResult(initalResult: InitialResult<Key, Value>) : CoroutinePageResult<Value> {
+        fun getPageResult(initalResult: InitialResult.Success<Key, Value>) : CoroutinePageResult<Value> {
             val pageResult = initalResult.run {
                 if (totalCount == 0 && position == 0)
                     getPageResult(data, previousPageKey, nextPageKey)
@@ -172,7 +190,7 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
                     getPageResult(data, position, totalCount, previousPageKey, nextPageKey)
 
             }
-            return CoroutinePageResult(PageResult.INIT, pageResult)
+            return CoroutinePageResult.Success(PageResult.INIT, pageResult)
         }
 
         private fun getPageResult(
@@ -223,16 +241,21 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
         
          fun getPageResult(loadResult: LoadResult<Key, Value>) : CoroutinePageResult<Value> {
              if (mDataSource.isInvalid) {
-                 return CoroutinePageResult(type, PageResult.getInvalidResult<Value>())
+                 return CoroutinePageResult.Success(type, PageResult.getInvalidResult<Value>())
              }
 
-             if (type == PageResult.APPEND) {
-                 mDataSource.nextKey = loadResult.adjacentPageKey
-             } else {
-                 mDataSource.previousKey = loadResult.adjacentPageKey
+             return when(loadResult) {
+                 is LoadResult.None -> CoroutinePageResult.None
+                 is LoadResult.Error -> CoroutinePageResult.Error(loadResult.throwable)
+                 is LoadResult.Success -> {
+                     if (type == PageResult.APPEND) {
+                         mDataSource.nextKey = loadResult.adjacentPageKey
+                     } else {
+                         mDataSource.previousKey = loadResult.adjacentPageKey
+                     }
+                     CoroutinePageResult.Success(type, PageResult(loadResult.data, 0, 0, 0))
+                 }
              }
-             
-             return CoroutinePageResult(type, PageResult(loadResult.data, 0, 0, 0))
         }
     }
 
@@ -258,8 +281,17 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
         enablePlaceholders: Boolean
     ) : CoroutinePageResult<Value> {
 
-        val initialResult = loadInitial(LoadInitialParams(initialLoadSize, enablePlaceholders))
-        return InitialResultHandler(this, enablePlaceholders).getPageResult(initialResult)
+        return loadInitial(LoadInitialParams(initialLoadSize, enablePlaceholders)).run {
+
+            when (this) {
+                InitialResult.None -> CoroutinePageResult.None
+                is InitialResult.Error -> CoroutinePageResult.Error(this.throwable)
+                is InitialResult.Success -> InitialResultHandler(
+                    this@CoroutinePageKeyedDataSource,
+                    enablePlaceholders
+                ).getPageResult(this)
+            }
+        }
     }
 
 
@@ -272,7 +304,7 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
             val afterResult = loadAfter(LoadParams(key, pageSize))
             return LoadResultHandler(this, PageResult.APPEND).getPageResult(afterResult)
         } else {
-            return CoroutinePageResult(PageResult.APPEND, PageResult.getEmptyResult())
+            return CoroutinePageResult.Success(PageResult.APPEND, PageResult.getEmptyResult())
         }
     }
 
@@ -285,7 +317,7 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
             val afterResult = loadBefore(LoadParams(key, pageSize))
             return LoadResultHandler(this, PageResult.PREPEND).getPageResult(afterResult)
         } else {
-            return CoroutinePageResult(PageResult.PREPEND, PageResult.getEmptyResult())
+            return CoroutinePageResult.Success(PageResult.PREPEND, PageResult.getEmptyResult())
         }
     }
 
@@ -323,8 +355,7 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
      *
      * If data cannot be loaded (for example, if the request is invalid, or the data would be stale
      * and inconsistent, it is valid to call [.invalidate] to invalidate the data source,
-     * and prevent further loading. In this case you should throw an exception, but this exception
-     * wont use anywhere.
+     * and prevent further loading.
      *
      * @param params Parameters for the load, including the key for the new page, and requested load
      * size.
@@ -347,8 +378,7 @@ abstract class CoroutinePageKeyedDataSource<Key, Value> : CoroutineContiguousDat
      *
      * If data cannot be loaded (for example, if the request is invalid, or the data would be stale
      * and inconsistent, it is valid to call [.invalidate] to invalidate the data source,
-     * and prevent further loading. In this case you should throw an exception, but this exception
-     * wont use anywhere.
+     * and prevent further loading.
      *
      * @param params Parameters for the load, including the key for the new page, and requested load
      * size.

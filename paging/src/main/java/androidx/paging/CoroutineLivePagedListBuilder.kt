@@ -125,7 +125,8 @@ class CoroutineLivePagedListBuilder<Key, Value>
     @SuppressLint("RestrictedApi")
     fun build(): LiveData<PagedList<Value>> {
         return create(
-            mInitialLoadKey, mConfig, mBoundaryCallback, mDataSourceFactory
+            mInitialLoadKey, mConfig, mBoundaryCallback, mDataSourceFactory,
+            ArchTaskExecutor.getMainThreadExecutor()
         )
     }
 
@@ -135,7 +136,8 @@ class CoroutineLivePagedListBuilder<Key, Value>
         initialLoadKey: Key?,
         config: PagedList.Config,
         boundaryCallback: PagedList.BoundaryCallback<Value>?,
-        dataSourceFactory: DataSource.Factory<Key, Value>
+        dataSourceFactory: DataSource.Factory<Key, Value>,
+        notifyExecutor: Executor
     ): LiveData<PagedList<Value>> = object {
 
         private lateinit var mDataSource: DataSource<Key, Value>
@@ -158,6 +160,7 @@ class CoroutineLivePagedListBuilder<Key, Value>
                 mDataSource.addInvalidatedCallback(mCallback)
 
                 mList = CoroutinePagedList.Builder(mDataSource, config)
+                    .setNotifyExecutor(notifyExecutor)
                     .setBoundaryCallback(boundaryCallback)
                     .setInitialKey(initializeKey)
                     .build()

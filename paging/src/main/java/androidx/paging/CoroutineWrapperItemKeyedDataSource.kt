@@ -54,19 +54,35 @@ class CoroutineWrapperItemKeyedDataSource<K, A, B>(
 
     override suspend fun loadInitial(params: LoadInitialParams<K>): InitialResult<B> {
         return mSource.loadInitial(params).run {
-            InitialResult(convertWithStashedKeys(data), position, totalCount)
+            when (this) {
+                InitialResult.None -> InitialResult.None
+                is InitialResult.Error -> this
+                is InitialResult.Success -> InitialResult.Success(
+                    convertWithStashedKeys(data),
+                    position,
+                    totalCount
+                )
+            }
         }
     }
 
     override suspend fun loadAfter(params: LoadParams<K>): LoadResult<B> {
         return mSource.loadAfter(params).run {
-            LoadResult(convertWithStashedKeys(data))
+            when (this) {
+                LoadResult.None -> LoadResult.None
+                is LoadResult.Error -> this
+                is LoadResult.Success -> LoadResult.Success(convertWithStashedKeys(data))
+            }
         }
     }
 
     override suspend fun loadBefore(params: LoadParams<K>): LoadResult<B> {
         return mSource.loadBefore(params).run {
-            LoadResult(convertWithStashedKeys(data))
+            when (this) {
+                LoadResult.None -> LoadResult.None
+                is LoadResult.Error -> this
+                is LoadResult.Success -> LoadResult.Success(convertWithStashedKeys(data))
+            }
         }
     }
 

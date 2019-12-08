@@ -30,13 +30,13 @@ class CoroutineListDataSource<T>(list: List<T>) :
         // for simplicity, we could return everything immediately,
 // but we tile here since it's expected behavior
         val sublist = mList.subList(position, position + loadSize)
-        return InitialResult(sublist, position, totalCount)
+        return InitialResult.Success(sublist, position, totalCount)
     }
 
     override suspend fun loadRange(
         params: LoadRangeParams
     ) : LoadRangeResult<T> {
-        return LoadRangeResult(mList.subList(
+        return LoadRangeResult.Success(mList.subList(
             params.startPosition,
             params.startPosition + params.loadSize
         ))

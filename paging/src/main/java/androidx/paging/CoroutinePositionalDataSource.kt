@@ -19,7 +19,6 @@ import androidx.annotation.WorkerThread
 import androidx.arch.core.util.Function
 import androidx.paging.CoroutinePositionalDataSource.LoadInitialCallback
 import androidx.paging.PageResult.*
-import java.util.concurrent.Executor
 
 /**
  * Position-based data loader for a fixed-size, countable data set, supporting fixed-size loads at
@@ -165,7 +164,13 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
          */
         internal abstract fun onResult(data: List<T>, position: Int) : CoroutinePageResult<T>
     }
-    data class InitialResult<T>(val data: List<T>, val position: Int, val totalCount: Int? = null)
+    sealed class InitialResult<out T> {
+        data class Success<T>(val data: List<T>, val position: Int, val totalCount: Int? = null) : InitialResult<T>()
+
+        data class Error(val throwable: Throwable) : InitialResult<Nothing>()
+
+        object None : InitialResult<Nothing>()
+    }
 
     /**
      * Callback for PositionalDataSource [.loadRange]
@@ -190,7 +195,13 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
          */
         internal abstract fun onResult(data: List<T>) : CoroutinePageResult<T>
     }
-    data class LoadRangeResult<T>(val data: List<T>)
+    sealed class LoadRangeResult<out T> {
+        data class Success<out T>(val data: List<T>) : LoadRangeResult<T>()
+
+        data class Error(val throwable: Throwable) : LoadRangeResult<Nothing>()
+
+        object None : LoadRangeResult<Nothing>()
+    }
 
     internal class LoadInitialCallbackImpl<T>(
         private val mDataSource: CoroutinePositionalDataSource<*>,
@@ -207,7 +218,7 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
         ) : CoroutinePageResult<T> {
 
             if(mDataSource.isInvalid)
-                return CoroutinePageResult(INIT, getInvalidResult())
+                return CoroutinePageResult.Success(INIT, getInvalidResult())
 
             LoadCallbackHelper.validateInitialLoadParams(data, position, totalCount)
 
@@ -222,12 +233,12 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
             }
             return if (mCountingEnabled) {
                 val trailingUnloadedCount = totalCount - position - data.size
-                CoroutinePageResult(
+                CoroutinePageResult.Success(
                     INIT,
                     PageResult(data, position, trailingUnloadedCount, 0)
                 )
             } else { // Only occurs when wrapped as contiguous
-                CoroutinePageResult(INIT, PageResult(data, position))
+                CoroutinePageResult.Success(INIT, PageResult(data, position))
             }
         }
 
@@ -237,7 +248,7 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
         ) : CoroutinePageResult<T> {
 
             if(mDataSource.isInvalid)
-                return CoroutinePageResult(INIT, getInvalidResult())
+                return CoroutinePageResult.Success(INIT, getInvalidResult())
 
             require(position >= 0) { "Position must be non-negative" }
             require(!(data.isEmpty() && position != 0)) { "Initial result cannot be empty if items are present in data set." }
@@ -246,7 +257,7 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
                         + " provided. Please call the three-parameter onResult method, or"
                         + " disable placeholders in the PagedList.Config")
             }
-            return CoroutinePageResult(INIT, PageResult(data, position))
+            return CoroutinePageResult.Success(INIT, PageResult(data, position))
         }
 
         init {
@@ -263,9 +274,9 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
 
         override fun onResult(data: List<T>) : CoroutinePageResult<T> {
             if (mDataSource.isInvalid) {
-                return CoroutinePageResult(mResultType, PageResult.getInvalidResult<T>())
+                return CoroutinePageResult.Success(mResultType, PageResult.getInvalidResult<T>())
             }
-            return CoroutinePageResult(mResultType,
+            return CoroutinePageResult.Success(mResultType,
                 PageResult(
                     data, 0, 0, mPositionOffset
                 )
@@ -289,10 +300,16 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
                 requestedStartPosition, requestedLoadSize, pageSize, acceptCount
             )
         return loadInitial(params).run {
-            if(totalCount != null)
-                callback.onResult(data, position, totalCount)
-            else
-                callback.onResult(data, position)
+            when(this) {
+                InitialResult.None -> CoroutinePageResult.None
+                is InitialResult.Error -> CoroutinePageResult.Error(throwable)
+                is InitialResult.Success -> {
+                    if(totalCount != null)
+                        callback.onResult(data, position, totalCount)
+                    else
+                        callback.onResult(data, position)
+                }
+            }
         }
     }
 
@@ -307,8 +324,10 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
         return if (count == 0) {
             callback.onResult(emptyList())
         } else {
-            loadRange(LoadRangeParams(startPosition, count)).run {
-                callback.onResult(data)
+            when(val rangeResult = loadRange(LoadRangeParams(startPosition, count))) {
+                LoadRangeResult.None -> CoroutinePageResult.None
+                is LoadRangeResult.Error -> CoroutinePageResult.Error(rangeResult.throwable)
+                is LoadRangeResult.Success -> callback.onResult(rangeResult.data)
             }
         }
     }
@@ -324,8 +343,6 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
      *
      * @param params Parameters for initial load, including requested start position, load size, and
      * page size.
-     * @param callback Callback that receives initial load data, including
-     * position and total data set size.
      */
     @WorkerThread
     abstract suspend fun loadInitial(
@@ -344,7 +361,6 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
      * the number of items requested, at the position requested.
      *
      * @param params Parameters for load, including start position and load size.
-     * @param callback Callback that receives loaded data.
      */
     @WorkerThread
     abstract suspend fun loadRange(
@@ -399,10 +415,10 @@ abstract class CoroutinePositionalDataSource<T> : CoroutineDataSource<Int, T>() 
         }
 
         override suspend fun dispatchLoadInitial(
-            position: Int?, initialLoadSize: Int, pageSize: Int,
+            key: Int?, initialLoadSize: Int, pageSize: Int,
             enablePlaceholders: Boolean
         ) : CoroutinePageResult<Value> {
-            val convertPosition = position ?: 0
+            val convertPosition = key ?: 0
             // Note enablePlaceholders will be false here, but we don't have a way to communicate
 // this to PositionalDataSource. This is fine, because only the list and its position
 // offset will be consumed by the LoadInitialCallback.

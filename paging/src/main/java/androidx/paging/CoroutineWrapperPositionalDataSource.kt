@@ -41,7 +41,16 @@ class CoroutineWrapperPositionalDataSource<A, B>(
         params: LoadInitialParams
     ) : InitialResult<B> {
         return mSource.loadInitial(params).run {
-            InitialResult(convert(mListFunction, data), position, totalCount)
+            when(this) {
+                InitialResult.None -> InitialResult.None
+                is InitialResult.Error -> this
+                is InitialResult.Success -> InitialResult.Success(
+                    convert(mListFunction, data),
+                    position,
+                    totalCount
+                )
+            }
+
         }
     }
 
@@ -49,7 +58,11 @@ class CoroutineWrapperPositionalDataSource<A, B>(
         params: LoadRangeParams
     ) : LoadRangeResult<B> {
         return mSource.loadRange(params).run {
-            LoadRangeResult(convert(mListFunction, data))
+            when(this) {
+                LoadRangeResult.None -> LoadRangeResult.None
+                is LoadRangeResult.Error -> this
+                is LoadRangeResult.Success -> LoadRangeResult.Success(convert(mListFunction, data))
+            }
         }
     }
 

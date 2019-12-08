@@ -172,7 +172,11 @@ class CoroutineTiledPagedList<T> @WorkerThread constructor(
                 val count = Math.min(pageSize, mStorage.size - startPosition)
                 mDataSource.dispatchLoadRange(
                     PageResult.TILE, startPosition, count
-                ).run { onPageResult(type, pageResult) }
+                ).run {
+                    when(this) {
+                        is CoroutineDataSource.CoroutinePageResult.Success -> onPageResult(type, pageResult)
+                    }
+                }
             }
             //})
         }
@@ -204,7 +208,11 @@ class CoroutineTiledPagedList<T> @WorkerThread constructor(
                 mDataSource.dispatchLoadInitial(
                     true, roundedPageStart, firstLoadSize,
                     pageSize
-                ).run { onPageResult(type, pageResult) }
+                ).run {
+                    when(this) {
+                        is CoroutineDataSource.CoroutinePageResult.Success -> onPageResult(type, pageResult)
+                    }
+                }
             }
         }
     }

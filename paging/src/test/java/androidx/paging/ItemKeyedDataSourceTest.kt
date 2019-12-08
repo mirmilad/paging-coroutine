@@ -19,26 +19,17 @@ package androidx.paging
 import io.mockk.every
 import io.mockk.mockkStatic
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestCoroutineDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runBlockingTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
+import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
-import org.mockito.ArgumentCaptor
-import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.verify
-import org.mockito.Mockito.verifyNoMoreInteractions
 import java.lang.IllegalStateException
 
 @RunWith(JUnit4::class)
@@ -95,7 +86,8 @@ class ItemKeyedDataSourceTest {
 
         //verify(receiver).onPageResult(anyInt(), captor.captureForKotlin())
         //verifyNoMoreInteractions(receiver)
-        assertNotNull(result.pageResult)
+        assertTrue(result is CoroutineDataSource.CoroutinePageResult.Success)
+        assertNotNull((result as CoroutineDataSource.CoroutinePageResult.Success).pageResult)
         return result.pageResult
     }
 
@@ -245,7 +237,8 @@ class ItemKeyedDataSourceTest {
         //verifyNoMoreInteractions(callback)
 
         //val observed = argument.value
-        var observed = result.data
+        assertTrue(result is CoroutineItemKeyedDataSource.LoadResult.Success)
+        var observed = (result as CoroutineItemKeyedDataSource.LoadResult.Success).data
 
         assertEquals(ITEMS_BY_NAME_ID.subList(0, 5), observed)
     }
@@ -266,9 +259,9 @@ class ItemKeyedDataSourceTest {
             val endExclusive = Math.min(start + params.requestedLoadSize, items.size)
 
             return if (params.placeholdersEnabled && counted) {
-                InitialResult(items.subList(start, endExclusive), start, items.size)
+                InitialResult.Success(items.subList(start, endExclusive), start, items.size)
             } else {
-                InitialResult(items.subList(start, endExclusive))
+                InitialResult.Success(items.subList(start, endExclusive))
             }
         }
 
@@ -276,7 +269,7 @@ class ItemKeyedDataSourceTest {
             val start = findFirstIndexAfter(params.key)
             val endExclusive = Math.min(start + params.requestedLoadSize, items.size)
 
-            return LoadResult(items.subList(start, endExclusive))
+            return LoadResult.Success(items.subList(start, endExclusive))
         }
 
         override suspend fun loadBefore(params: LoadParams<Key>) : LoadResult<Item> {
@@ -284,7 +277,7 @@ class ItemKeyedDataSourceTest {
             val endExclusive = Math.max(0, firstIndexBefore + 1)
             val start = Math.max(0, firstIndexBefore - params.requestedLoadSize + 1)
 
-            return LoadResult(items.subList(start, endExclusive))
+            return LoadResult.Success(items.subList(start, endExclusive))
         }
 
         override fun getKey(item: Item): Key {
@@ -346,14 +339,14 @@ class ItemKeyedDataSourceTest {
     fun loadInitialCallbackSuccess() = performLoadInitial {
         // LoadInitialCallback correct usage
         //CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b"), 0, 2)
-        CoroutineItemKeyedDataSource.InitialResult(listOf("a", "b"), 0, 2)
+        CoroutineItemKeyedDataSource.InitialResult.Success(listOf("a", "b"), 0, 2)
     }
 
     @Test
     fun loadInitialCallbackNotPageSizeMultiple() = performLoadInitial {
         // Keyed LoadInitialCallback *can* accept result that's not a multiple of page size
         val elevenLetterList = List(11) { "" + 'a' + it }
-        CoroutineItemKeyedDataSource.InitialResult(elevenLetterList, 0, 12)
+        CoroutineItemKeyedDataSource.InitialResult.Success(elevenLetterList, 0, 12)
     }
 
     ////These tests are not applicable because expected exceptions are thrown in coroutine scope
@@ -384,7 +377,7 @@ class ItemKeyedDataSourceTest {
     @Test
     fun initialLoadCallbackInvalidThreeArg() = performLoadInitial(invalidateDataSource = true) {
         // LoadInitialCallback doesn't throw on invalid args if DataSource is invalid
-        CoroutineItemKeyedDataSource.InitialResult(emptyList(), 0, 1)
+        CoroutineItemKeyedDataSource.InitialResult.Success(emptyList(), 0, 1)
     }
 
     private abstract class WrapperDataSource<K, A, B>(private val source: CoroutineItemKeyedDataSource<K, A>)
@@ -407,19 +400,35 @@ class ItemKeyedDataSourceTest {
 
         override suspend fun loadInitial(params: LoadInitialParams<K>) : InitialResult<B> {
             return source.loadInitial(params).run {
-                InitialResult(convert(data), position, totalCount)
+                when (this) {
+                    InitialResult.None -> InitialResult.None
+                    is InitialResult.Error -> this
+                    is InitialResult.Success -> InitialResult.Success(
+                        convert(data),
+                        position,
+                        totalCount
+                    )
+                }
             }
         }
 
         override suspend fun loadAfter(params: LoadParams<K>) : LoadResult<B> {
             return source.loadAfter(params).run {
-                LoadResult(convert(data))
+                when(this) {
+                    LoadResult.None -> LoadResult.None
+                    is LoadResult.Error -> this
+                    is LoadResult.Success -> LoadResult.Success(convert(data))
+                }
             }
         }
 
         override suspend fun loadBefore(params: LoadParams<K>) : LoadResult<B> {
             return source.loadBefore(params).run {
-                LoadResult(convert(data))
+                when(this) {
+                    LoadResult.None -> LoadResult.None
+                    is LoadResult.Error -> this
+                    is LoadResult.Success -> LoadResult.Success(convert(data))
+                }
             }
         }
 
@@ -462,9 +471,10 @@ class ItemKeyedDataSourceTest {
             //verify(loadInitialCallback).onResult(
             //        ITEMS_BY_NAME_ID.subList(0, 10).map { DecoratedItem(it) })
             //verifyNoMoreInteractions(loadInitialCallback)
+            assertTrue(initalResult is CoroutineItemKeyedDataSource.InitialResult.Success)
             assertEquals(
                 ITEMS_BY_NAME_ID.subList(0, 10).map { DecoratedItem(it) },
-                initalResult.data
+                (initalResult as CoroutineItemKeyedDataSource.InitialResult.Success).data
             )
 
             //@Suppress("UNCHECKED_CAST")
@@ -479,7 +489,9 @@ class ItemKeyedDataSourceTest {
             //        31
             //    ).map { DecoratedItem(it) })
             //verifyNoMoreInteractions(loadCallback)
-            assertEquals(ITEMS_BY_NAME_ID.subList(21, 31).map { DecoratedItem(it) }, after.data)
+            assertTrue(after is CoroutineItemKeyedDataSource.LoadResult.Success)
+            assertEquals(ITEMS_BY_NAME_ID.subList(21, 31).map { DecoratedItem(it) },
+                (after as CoroutineItemKeyedDataSource.LoadResult.Success).data)
 
             // load before
             var before = wrapper.loadBefore(CoroutineItemKeyedDataSource.LoadParams(key, 10))
@@ -489,7 +501,9 @@ class ItemKeyedDataSourceTest {
             //        20
             //    ).map { DecoratedItem(it) })
             //verifyNoMoreInteractions(loadCallback)
-            assertEquals(ITEMS_BY_NAME_ID.subList(10, 20).map { DecoratedItem(it) }, before.data)
+            assertTrue(before is CoroutineItemKeyedDataSource.LoadResult.Success)
+            assertEquals(ITEMS_BY_NAME_ID.subList(10, 20).map { DecoratedItem(it) },
+                (before as CoroutineItemKeyedDataSource.LoadResult.Success).data)
         }
         // verify invalidation
         orig.invalidate()
