@@ -2,6 +2,30 @@
 A paging library which uses Kotlin Coroutine instead of background executor and callback, based on [androidx.paging](https://developer.android.com/topic/libraries/architecture/paging) (Ver: 2.1.0) architucture component.
 
 ## Usage
+### Dependencies
+The paging-coroutine library is avaible on JitPack. Add the JitPack maven repository to the root build.gradle file.
+```
+allprojects {
+	repositories {
+		...
+		maven { url 'https://jitpack.io' }
+	}
+}
+```
+Add the following dependency to the project build.gradle file.
+```
+dependencies {
+	implementation 'com.github.mirmilad:paging-coroutine:v1.0.0-alpha01'
+}
+```
+This library also needs these dependencies.
+```
+dependencies {
+	implementation "androidx.lifecycle:lifecycle-livedata:2.2.0-rc02"			//or above
+	implementation "androidx.paging:paging-runtime:2.1.0"						//or above
+}
+```
+
 ### How to Use
 The paging-coroutine library behaves like the original paging library. But there are few modifications on classes name and abstract methods. When you extend a data source, instead of using callbacks to pass data to library, you have to return it.
 
@@ -87,6 +111,9 @@ class MyViewModel() : ViewModel() {
 	}
 }
 ```
+## Sample Project
+For more samples, see the modified version of `PagingWithNetworkSample` project [here](https://github.com/mirmilad/architecture-components-samples/tree/master/PagingWithNetworkSample). This Sample app was forked from official `architecture-components-samples` repository and has been modified to use paging-coroutine library.
+
 
 ## Compatibility
 Since [DataSource](https://developer.android.com/reference/androidx/paging/DataSource) and [PagedList](https://developer.android.com/reference/androidx/paging/PagedList) classes are used from origianl library, paging-coroutine library is compatible with [PagedListAdapter](https://developer.android.com/reference/androidx/paging/PagedListAdapter.html). 
